@@ -27,6 +27,7 @@ export class UIScene extends Phaser.Scene {
   private pauseStats?: PauseStats;
   private gameOverStats?: GameOverStats;
   private rate = 1;
+  private levelupInputReady = true;
 
   constructor() {
     super({ key: 'UI', active: false });
@@ -158,6 +159,12 @@ export class UIScene extends Phaser.Scene {
     this.levelupPayload = payload;
     const c = this.add.container(0, 0).setDepth(200);
     this.overlay = c;
+    this.levelupInputReady = !this.input.activePointer.isDown;
+    if (!this.levelupInputReady) {
+      this.input.once('pointerup', () => this.time.delayedCall(0, () => {
+        if (this.overlay === c) this.levelupInputReady = true;
+      }));
+    }
 
     const dim = this.add.graphics();
     dim.fillStyle(0x05070c, 0.82).fillRect(0, 0, VIEW.width, VIEW.height);
@@ -288,7 +295,9 @@ export class UIScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     zone.on('pointerover', () => draw(true));
     zone.on('pointerout', () => draw(false));
-    zone.on('pointerup', () => this.pick(choice));
+    zone.on('pointerup', () => {
+      if (this.levelupInputReady) this.pick(choice);
+    });
     c.add(zone);
 
     return c;
