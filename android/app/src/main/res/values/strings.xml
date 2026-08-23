@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Cat Mouse Survivor</string>
+    <string name="title_activity_main">Cat Mouse Survivor</string>
+    <string name="package_name">com.kgh07.catmouse.survivor</string>
+    <string name="custom_url_scheme">com.kgh07.catmouse.survivor</string>
+</resources>

@@ -1,0 +1,33 @@
+import Phaser from 'phaser';
+
+/**
+ * GameScene <-> UIScene 통신용 이벤트 버스.
+ * 씬을 pause 해도 이벤트 핸들러는 계속 동작하므로
+ * "레벨업 중 게임 정지" 같은 흐름을 만들기 좋다.
+ */
+export const bus = new Phaser.Events.EventEmitter();
+
+export const EV = {
+  /** HUD 갱신 */
+  stats: 'stats',
+  /** 레벨업 → 선택지 3장 제시 */
+  levelup: 'levelup',
+  /** UI에서 카드 선택 완료 */
+  picked: 'picked',
+  /** ESC 일시정지 */
+  pause: 'pause',
+  /** 일시정지 해제 */
+  resume: 'resume',
+  /** 게임 배속 변경 */
+  speed: 'speed',
+  /** 사망 */
+  gameover: 'gameover',
+  /** 재시작 요청 */
+  restart: 'restart',
+  /** 시작 화면으로 이동 */
+  menu: 'menu',
+  /** 테마 전환 */
+  themeChanged: 'themeChanged',
+  /** 브라우저/기기 화면 크기 변경 */
+  resize: 'resize',
+} as const;
