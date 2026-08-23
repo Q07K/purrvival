@@ -139,8 +139,8 @@ export class UIScene extends Phaser.Scene {
   private onResize() {
     const compact = VIEW.width < 600;
     this.timeText.setPosition(compact ? VIEW.width - 12 : VIEW.width / 2, 14).setOrigin(compact ? 1 : 0.5, 0);
-    this.speedText.setPosition(compact ? 12 : VIEW.width - 12, 14).setOrigin(compact ? 0 : 1, 0);
-    this.pauseText.setPosition(compact ? 64 : VIEW.width - 68, 14);
+    this.speedText.setPosition(compact ? 12 : VIEW.width - 12, compact ? 68 : 14).setOrigin(compact ? 0 : 1, 0);
+    this.pauseText.setPosition(compact ? 64 : VIEW.width - 68, compact ? 68 : 14);
     this.statText.setFontSize(compact ? 12 : 14);
     this.helpText.setPosition(VIEW.width - 12, VIEW.height - 10).setVisible(!compact);
     if (this.latestStats) this.onStats(this.latestStats);
