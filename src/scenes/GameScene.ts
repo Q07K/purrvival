@@ -151,6 +151,7 @@ export class GameScene extends Phaser.Scene {
     bus.on(EV.restart, this.onRestart, this);
     bus.on(EV.resume, this.onResume, this);
     bus.on(EV.speed, this.onRate, this);
+    bus.on(EV.pauseRequest, this.onPause, this);
     bus.on(EV.menu, this.onMenu, this);
     bus.on(EV.resize, this.onResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -158,6 +159,7 @@ export class GameScene extends Phaser.Scene {
       bus.off(EV.restart, this.onRestart, this);
       bus.off(EV.resume, this.onResume, this);
       bus.off(EV.speed, this.onRate, this);
+      bus.off(EV.pauseRequest, this.onPause, this);
       bus.off(EV.menu, this.onMenu, this);
       kb.off('keydown-F', this.onCycleRate, this);
       bus.off(EV.resize, this.onResize, this);

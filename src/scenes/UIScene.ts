@@ -68,7 +68,7 @@ export class UIScene extends Phaser.Scene {
       .setDepth(101)
       .setInteractive({ useHandCursor: true })
       .on('pointerdown', () => {
-        if (!this.overlay) bus.emit(EV.pause);
+        if (!this.overlay) bus.emit(EV.pauseRequest);
       });
 
     this.helpText = this.add
