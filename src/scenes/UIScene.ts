@@ -17,6 +17,7 @@ export class UIScene extends Phaser.Scene {
   private timeText!: Phaser.GameObjects.Text;
   private statText!: Phaser.GameObjects.Text;
   private speedText!: Phaser.GameObjects.Text;
+  private pauseText!: Phaser.GameObjects.Text;
   private helpText!: Phaser.GameObjects.Text;
   private overlay: Phaser.GameObjects.Container | null = null;
   private accent = 0x4fd1ff;
@@ -50,7 +51,7 @@ export class UIScene extends Phaser.Scene {
       .setDepth(101);
 
     this.speedText = this.add
-      .text(VIEW.width - 12, 18, '1×', { fontFamily: FONT, fontSize: '16px', color: '#8dceff' })
+      .text(VIEW.width - 12, 14, '1×', { fontFamily: FONT, fontSize: '16px', color: '#8dceff', backgroundColor: '#232c3b', padding: { x: 8, y: 4 } })
       .setOrigin(1, 0)
       .setDepth(101)
       .setInteractive({ useHandCursor: true })
@@ -60,8 +61,17 @@ export class UIScene extends Phaser.Scene {
         bus.emit(EV.speed, rates[(rates.indexOf(this.rate) + 1) % rates.length]);
       });
 
+    this.pauseText = this.add
+      .text(VIEW.width - 62, 14, 'Ⅱ', { fontFamily: FONT, fontSize: '18px', color: '#ffffff', backgroundColor: '#232c3b', padding: { x: 10, y: 3 } })
+      .setOrigin(0.5, 0)
+      .setDepth(101)
+      .setInteractive({ useHandCursor: true })
+      .on('pointerdown', () => {
+        if (!this.overlay) bus.emit(EV.pause);
+      });
+
     this.helpText = this.add
-      .text(VIEW.width - 12, VIEW.height - 10, 'WASD / 방향키 · 화면 드래그 이동 · F 배속 · ESC 일시정지', {
+      .text(VIEW.width - 12, VIEW.height - 10, 'WASD / 방향키 · 화면 드래그 이동 · F/배속 버튼 · ESC/Ⅱ 일시정지', {
         fontFamily: FONT,
         fontSize: '13px',
         color: '#6f7c8f',
@@ -128,7 +138,8 @@ export class UIScene extends Phaser.Scene {
   private onResize() {
     const compact = VIEW.width < 600;
     this.timeText.setPosition(compact ? VIEW.width - 12 : VIEW.width / 2, 14).setOrigin(compact ? 1 : 0.5, 0);
-    this.speedText.setPosition(compact ? 12 : VIEW.width - 12, 18).setOrigin(compact ? 0 : 1, 0);
+    this.speedText.setPosition(compact ? 12 : VIEW.width - 12, 14).setOrigin(compact ? 0 : 1, 0);
+    this.pauseText.setPosition(compact ? 64 : VIEW.width - 68, 14);
     this.statText.setFontSize(compact ? 12 : 14);
     this.helpText.setPosition(VIEW.width - 12, VIEW.height - 10).setVisible(!compact);
     if (this.latestStats) this.onStats(this.latestStats);
