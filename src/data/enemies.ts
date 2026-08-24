@@ -39,9 +39,9 @@ export const ELITE: EnemyKind = {
   elite: true, from: 0, weight: 0, cluster: 1,
 };
 
-/** 굴 붕괴에서만 나오는 고체력 돌격 쥐. */
+/** 굴 붕괴에서만 나오는 대형 돌격 쥐. 보상 몹이 아니라 피해야 할 파도다. */
 export const BURROW_RAIDER: EnemyKind = {
-  id: 'burrow', hp: 24, speed: 60, damage: 8, radius: 13, xp: 1,
+  id: 'burrow', hp: 48, speed: 78, damage: 14, radius: 26, xp: 1,
   elite: false, from: 0, weight: 0, cluster: 1,
 };
 

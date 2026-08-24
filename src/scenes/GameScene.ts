@@ -565,7 +565,7 @@ export class GameScene extends Phaser.Scene {
     e.hitAt.fill(0);
 
     e.sprite.setTexture(kind.id === 'burrow' ? 'asset:burrow:sheet' : TEX.enemy(kind.id));
-    if (kind.id === 'burrow') e.sprite.setScale(40 / 768);
+    if (kind.id === 'burrow') e.sprite.setScale(80 / 768);
     else this.scaleTo(e.sprite, this.enemyDisplaySize(kind.id, e.radius));
     e.sprite.clearTint();
     e.sprite.setVisible(true);
@@ -1436,7 +1436,7 @@ export class GameScene extends Phaser.Scene {
 
     for (const e of this.enemies.items) {
       e.sprite.setTexture(e.kind === 'burrow' ? 'asset:burrow:sheet' : TEX.enemy(e.kind));
-      if (e.kind === 'burrow') e.sprite.setScale(40 / 768);
+      if (e.kind === 'burrow') e.sprite.setScale(80 / 768);
       else this.scaleTo(e.sprite, this.enemyDisplaySize(e.kind, e.radius));
     }
     for (const g of this.gems.items) {
