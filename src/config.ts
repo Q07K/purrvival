@@ -61,6 +61,8 @@ export function difficultyScale(t: number) {
   return {
     hp: 1 + (t / 60) * 0.35 + Math.pow(t / 240, 2) * 1.0,
     speed: 1 + (t / 60) * 0.04,
+    /** 장기 런이 무한 AFK가 되지 않도록 적 공격력도 완만하게 상승한다. */
+    damage: 1 + t / 900,
     /** 초당 스폰 "마릿수". 무리(cluster)로 나오는 적은 그만큼 예산을 더 쓴다. */
     rate: 1.4 + (t / 60) * 1.8,
   };

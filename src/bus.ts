@@ -38,6 +38,8 @@ export const EV = {
   restart: 'restart',
   /** 시작 화면으로 이동 */
   menu: 'menu',
+  /** 현재 런을 포기하고 지금까지의 보상을 정산 */
+  quit: 'quit',
   /** 테마 전환 */
   themeChanged: 'themeChanged',
   /** 브라우저/기기 화면 크기 변경 */

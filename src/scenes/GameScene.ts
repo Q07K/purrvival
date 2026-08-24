@@ -198,6 +198,7 @@ export class GameScene extends Phaser.Scene {
     bus.on(EV.pauseRequest, this.onPause, this);
     bus.on(EV.overtime, this.onOvertime, this);
     bus.on(EV.menu, this.onMenu, this);
+    bus.on(EV.quit, this.onQuit, this);
     bus.on(EV.resize, this.onResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       bus.off(EV.picked, this.onPicked, this);
@@ -209,6 +210,7 @@ export class GameScene extends Phaser.Scene {
       bus.off(EV.pauseRequest, this.onPause, this);
       bus.off(EV.overtime, this.onOvertime, this);
       bus.off(EV.menu, this.onMenu, this);
+      bus.off(EV.quit, this.onQuit, this);
       kb.off('keydown-F', this.onCycleRate, this);
       bus.off(EV.resize, this.onResize, this);
       this.input.off('pointerdown', this.onTouchStart, this);
@@ -550,7 +552,7 @@ export class GameScene extends Phaser.Scene {
     e.maxHp = kind.hp * hpScale * this.enemyHpMult;
     e.hp = e.maxHp;
     e.speed = kind.speed * spScale;
-    e.damage = kind.damage * this.enemyDamageMult;
+    e.damage = kind.damage * difficultyScale(this.elapsed).damage * this.enemyDamageMult;
     e.radius = kind.radius;
     e.xp = kind.xp;
     e.elite = kind.elite;
@@ -601,6 +603,13 @@ export class GameScene extends Phaser.Scene {
       e.y += (dy * inv * e.speed + e.knockY) * dt;
       e.knockX *= decay;
       e.knockY *= decay;
+
+      if (e.boss && dist <= 260 && this.elapsed * 1000 >= e.hitAt[7]) {
+        e.hitAt[7] = this.elapsed * 1000 + 1600;
+        p.hp -= Math.max(1, e.damage * 0.6 - p.armor);
+        this.cameras.main.shake(150, 0.008);
+        sfx.play('hurt');
+      }
 
       if (e.flash > 0) {
         e.flash -= dt;
@@ -1177,6 +1186,7 @@ export class GameScene extends Phaser.Scene {
     const buf = this.hash.query(p.x, p.y, PLAYER.radius + 40, this.qbuf);
 
     let worst = 0;
+    let contacts = 0;
     for (let n = 0; n < buf.length; n++) {
       const e = items[buf[n]];
       if (!e.active) continue;
@@ -1184,12 +1194,14 @@ export class GameScene extends Phaser.Scene {
       const dx = e.x - p.x;
       const dy = e.y - p.y;
       if (dx * dx + dy * dy > rr * rr) continue;
+      contacts++;
       if (e.damage > worst) worst = e.damage;
     }
 
     if (worst > 0) {
       sfx.play('hurt');
-      p.hp -= Math.max(1, worst - p.armor);
+      const pressure = Math.min(4, 1 + (contacts - 1) * 0.2);
+      p.hp -= Math.max(1, worst * pressure - p.armor);
       p.invuln = PLAYER.invulnTime;
       this.cameras.main.shake(120, 0.006);
     }
@@ -1302,6 +1314,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onMutationPicked(choice: MutationChoice) {
+    this.enemyDamageMult *= 1.15;
     if (choice.id === 'march') { this.spawnMult *= 1.35; this.goldMult *= 1.25; }
     if (choice.id === 'redMoon') { this.enemyDamageMult *= 1.25; this.goldMult *= 1.3; this.nextEliteAt = Math.min(this.nextEliteAt, this.elapsed + 15); }
     if (choice.id === 'harvest') { this.enemyHpMult *= 1.25; this.gemXpMult *= 1.5; this.goldMult *= 1.2; }
@@ -1358,7 +1371,7 @@ export class GameScene extends Phaser.Scene {
     this.scene.resume();
   }
 
-  private onDeath() {
+  private onDeath(aborted = false) {
     this.dead = true;
     const score = this.runScore();
     const gold = Math.max(0, Math.floor((this.kills * 0.05 + this.elapsed * 0.5) * this.goldMult) - this.earnedGold);
@@ -1369,6 +1382,7 @@ export class GameScene extends Phaser.Scene {
       kills: this.kills,
       level: this.player.level,
       gold,
+      aborted,
       recordRank, bestTime: meta.bestTime(), score, mutations: this.mutationCount,
     });
     this.scene.pause();
@@ -1397,6 +1411,10 @@ export class GameScene extends Phaser.Scene {
   private onMenu() {
     this.scene.stop('UI');
     this.scene.start('CharacterSelect');
+  }
+
+  private onQuit() {
+    if (!this.dead) this.onDeath(true);
   }
 
   private onResize() {

@@ -201,6 +201,7 @@ export interface GameOverStats {
   kills: number;
   level: number;
   gold: number;
+  aborted?: boolean;
   cleared?: boolean;
   recordRank?: number;
   bestTime?: number;

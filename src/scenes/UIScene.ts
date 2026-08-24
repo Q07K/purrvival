@@ -468,12 +468,17 @@ export class UIScene extends Phaser.Scene {
       this.clearOverlay();
       bus.emit(EV.restart);
     };
+    const quit = () => {
+      this.clearOverlay();
+      bus.emit(EV.quit);
+    };
 
     panel.add(this.makeButton(VIEW.width / 2 - 92, 392, '  이어하기  ', resume, true));
     panel.add(this.makeButton(VIEW.width / 2 + 92, 392, '  다시 시작  ', restart, false));
+    panel.add(this.makeButton(VIEW.width / 2, 444, '  그만두고 정산  ', quit, false));
     panel.add(
       this.add
-        .text(VIEW.width / 2, 444, 'ESC 로도 이어할 수 있습니다', {
+        .text(VIEW.width / 2, 492, 'ESC 로도 이어할 수 있습니다', {
           fontFamily: FONT, fontSize: '13px', color: '#5d6b80',
         })
         .setOrigin(0.5),
@@ -530,10 +535,10 @@ export class UIScene extends Phaser.Scene {
 
     panel.add(
       this.add
-        .text(VIEW.width / 2, 180, s.cleared ? '20분 완주!' : '사망', {
+        .text(VIEW.width / 2, 180, s.cleared ? '20분 완주!' : s.aborted ? '런 종료' : '사망', {
           fontFamily: FONT,
           fontSize: '52px',
-          color: s.cleared ? '#ffd36b' : '#ff6b6b',
+          color: s.cleared ? '#ffd36b' : s.aborted ? '#8dceff' : '#ff6b6b',
         })
         .setOrigin(0.5),
     );

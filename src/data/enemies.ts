@@ -47,7 +47,7 @@ export const BURROW_RAIDER: EnemyKind = {
 
 /** 20분 완주를 막는 쥐 군주 — 기존 엘리트 텍스처를 크게 재사용한다. */
 export const FINAL_BOSS: EnemyKind = {
-  ...ELITE, hp: 2200, speed: 38, damage: 34, radius: 48, xp: 300,
+  ...ELITE, hp: 3000, speed: 42, damage: 48, radius: 48, xp: 300,
 };
 
 /** 엘리트 등장 간격(초) */
