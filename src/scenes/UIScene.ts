@@ -322,7 +322,7 @@ export class UIScene extends Phaser.Scene {
     const dim = this.add.graphics();
     dim.fillStyle(0x05070c, 0.94).fillRect(0, 0, VIEW.width, VIEW.height);
     c.add(dim);
-    const scale = Phaser.Math.Clamp(Math.min(VIEW.width / 960, VIEW.height / 540), 1, 1.5);
+    const scale = Phaser.Math.Clamp(Math.min(VIEW.width / 960, VIEW.height / 540), 0.58, 1.5);
     const panel = this.add
       .container(VIEW.width / 2 * (1 - scale), VIEW.height / 2 - 250 * scale)
       .setScale(scale);
@@ -451,7 +451,7 @@ export class UIScene extends Phaser.Scene {
     const dim = this.add.graphics();
     dim.fillStyle(0x05070c, 0.9).fillRect(0, 0, VIEW.width, VIEW.height);
     c.add(dim);
-    const scale = Phaser.Math.Clamp(Math.min(VIEW.width / 960, VIEW.height / 540), 1, 1.5);
+    const scale = Phaser.Math.Clamp(Math.min(VIEW.width / 960, VIEW.height / 540), 0.58, 1.5);
     const panel = this.add
       .container(VIEW.width / 2 * (1 - scale), VIEW.height / 2 - 280 * scale)
       .setScale(scale);
@@ -459,10 +459,10 @@ export class UIScene extends Phaser.Scene {
 
     panel.add(
       this.add
-        .text(VIEW.width / 2, 180, '사망', {
+        .text(VIEW.width / 2, 180, s.cleared ? '20분 완주!' : '사망', {
           fontFamily: FONT,
           fontSize: '52px',
-          color: '#ff6b6b',
+          color: s.cleared ? '#ffd36b' : '#ff6b6b',
         })
         .setOrigin(0.5),
     );
@@ -471,7 +471,7 @@ export class UIScene extends Phaser.Scene {
         .text(
           VIEW.width / 2,
           252,
-          `생존 ${fmtTime(s.time)}   ·   처치 ${s.kills}   ·   레벨 ${s.level}\n골드 +${s.gold}`,
+          `${s.cleared ? '쥐 군주를 물리쳤습니다!\n' : ''}생존 ${fmtTime(s.time)}   ·   처치 ${s.kills}   ·   레벨 ${s.level}\n골드 +${s.gold}`,
           { fontFamily: FONT, fontSize: '18px', color: '#c9d3e0' },
         )
         .setOrigin(0.5),
@@ -483,7 +483,12 @@ export class UIScene extends Phaser.Scene {
     };
     this.bindOverlayKey('keydown-SPACE', restart);
     this.bindOverlayKey('keydown-ENTER', restart);
-    panel.add(this.makeButton(VIEW.width / 2, 330, '  다시 시작  ', restart, true));
+    if (s.cleared) {
+      panel.add(this.makeButton(VIEW.width / 2, 330, '  오버타임 계속하기  ', () => {
+        this.clearOverlay();
+        bus.emit(EV.overtime);
+      }, true));
+    } else panel.add(this.makeButton(VIEW.width / 2, 330, '  다시 시작  ', restart, true));
     panel.add(this.makeButton(VIEW.width / 2, 392, '  성장 상점  ', () => {
       this.clearOverlay();
       bus.emit(EV.menu);

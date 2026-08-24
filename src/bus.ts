@@ -18,6 +18,8 @@ export const EV = {
   pause: 'pause',
   /** UI 버튼의 일시정지 요청 */
   pauseRequest: 'pauseRequest',
+  /** 20분 완주 뒤 무한 오버타임 진입 */
+  overtime: 'overtime',
   /** 일시정지 해제 */
   resume: 'resume',
   /** 게임 배속 변경 */

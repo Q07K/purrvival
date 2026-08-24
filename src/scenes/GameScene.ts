@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
 import {
   CELL_SIZE, DESPAWN_RADIUS, KNOCKBACK_DECAY, MAX_ENEMIES, MAX_GEMS,
-  MAX_PROJECTILES, PLAYER, VIEW, GEM, difficultyScale, xpForLevel,
+  MAX_PROJECTILES, PLAYER, VIEW, GEM, difficultyScale, xpForLevel, FINAL_BOSS_TIME, OVERTIME_TIME,
 } from '../config';
 import { EV, bus } from '../bus';
-import { ELITE, ELITE_INTERVAL, ENEMY_KINDS } from '../data/enemies';
+import { ELITE, ELITE_INTERVAL, ENEMY_KINDS, FINAL_BOSS } from '../data/enemies';
 import type { EnemyKind } from '../data/enemies';
 import { Pool } from '../systems/Pool';
 import { Progression } from '../systems/Progression';
@@ -47,6 +47,10 @@ export class GameScene extends Phaser.Scene {
   private spawnCredit = 0;
   private nextGemMergeAt = 0;
   private nextEliteAt = ELITE_INTERVAL;
+  private finalBossSpawned = false;
+  private cleared = false;
+  private overtime = false;
+  private earnedGold = 0;
   private pendingLevels = 0;
   private awaitingChoice = false;
   private dead = false;
@@ -77,6 +81,10 @@ export class GameScene extends Phaser.Scene {
     this.spawnCredit = 0;
     this.nextGemMergeAt = 0;
     this.nextEliteAt = ELITE_INTERVAL;
+    this.finalBossSpawned = false;
+    this.cleared = false;
+    this.overtime = false;
+    this.earnedGold = 0;
     this.pendingLevels = 0;
     this.awaitingChoice = false;
     this.dead = false;
@@ -152,6 +160,7 @@ export class GameScene extends Phaser.Scene {
     bus.on(EV.resume, this.onResume, this);
     bus.on(EV.speed, this.onRate, this);
     bus.on(EV.pauseRequest, this.onPause, this);
+    bus.on(EV.overtime, this.onOvertime, this);
     bus.on(EV.menu, this.onMenu, this);
     bus.on(EV.resize, this.onResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
@@ -160,6 +169,7 @@ export class GameScene extends Phaser.Scene {
       bus.off(EV.resume, this.onResume, this);
       bus.off(EV.speed, this.onRate, this);
       bus.off(EV.pauseRequest, this.onPause, this);
+      bus.off(EV.overtime, this.onOvertime, this);
       bus.off(EV.menu, this.onMenu, this);
       kb.off('keydown-F', this.onCycleRate, this);
       bus.off(EV.resize, this.onResize, this);
@@ -193,7 +203,7 @@ export class GameScene extends Phaser.Scene {
       index, active: false, uid: 0, kind: 'grunt',
       x: 0, y: 0, hp: 1, maxHp: 1, speed: 0, damage: 0, radius: 10, xp: 1,
       hitAt: new Float64Array(8),
-      knockX: 0, knockY: 0, flash: 0, elite: false,
+      knockX: 0, knockY: 0, flash: 0, elite: false, boss: false,
       sprite: this.add.image(0, 0, TEX.enemy('grunt')).setDepth(DEPTH.enemy).setVisible(false),
     };
   }
@@ -341,8 +351,14 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    if (!this.finalBossSpawned && this.elapsed >= FINAL_BOSS_TIME) {
+      this.finalBossSpawned = true;
+      const point = this.spawnPoint(180);
+      this.spawnEnemy(FINAL_BOSS, point.x, point.y, d.hp, d.speed, true);
+    }
+
     if (this.elapsed >= this.nextEliteAt) {
-      this.nextEliteAt += ELITE_INTERVAL;
+      this.nextEliteAt += this.overtime && this.elapsed >= OVERTIME_TIME ? 30 : ELITE_INTERVAL;
       const point = this.spawnPoint(120);
       this.spawnEnemy(
         ELITE,
@@ -381,7 +397,7 @@ export class GameScene extends Phaser.Scene {
     return avail[0];
   }
 
-  private spawnEnemy(kind: EnemyKind, x: number, y: number, hpScale: number, spScale: number) {
+  private spawnEnemy(kind: EnemyKind, x: number, y: number, hpScale: number, spScale: number, boss = false) {
     const e = this.enemies.spawn();
     if (!e) return;
 
@@ -396,6 +412,7 @@ export class GameScene extends Phaser.Scene {
     e.radius = kind.radius;
     e.xp = kind.xp;
     e.elite = kind.elite;
+    e.boss = boss;
     e.knockX = 0;
     e.knockY = 0;
     e.flash = 0;
@@ -831,6 +848,7 @@ export class GameScene extends Phaser.Scene {
       }
       this.kills++;
       this.enemies.release(e);
+      if (e.boss) this.onClear();
     }
     else sfx.play('hit');
   }
@@ -1129,9 +1147,15 @@ export class GameScene extends Phaser.Scene {
     this.scene.resume();
   }
 
+  private onOvertime() {
+    this.overtime = true;
+    this.nextEliteAt = Math.min(this.nextEliteAt, this.elapsed + 30);
+    this.scene.resume();
+  }
+
   private onDeath() {
     this.dead = true;
-    const gold = Math.floor(this.kills * 0.05 + this.elapsed * 0.5);
+    const gold = Math.max(0, Math.floor(this.kills * 0.05 + this.elapsed * 0.5) - this.earnedGold);
     meta.earn(gold);
     bus.emit(EV.gameover, {
       time: this.elapsed,
@@ -1139,6 +1163,16 @@ export class GameScene extends Phaser.Scene {
       level: this.player.level,
       gold,
     });
+    this.scene.pause();
+  }
+
+  private onClear() {
+    if (this.cleared) return;
+    this.cleared = true;
+    const gold = Math.floor(this.kills * 0.05 + this.elapsed * 0.5) + 1000;
+    this.earnedGold += gold;
+    meta.earn(gold);
+    bus.emit(EV.gameover, { time: this.elapsed, kills: this.kills, level: this.player.level, gold, cleared: true });
     this.scene.pause();
   }
 

@@ -16,6 +16,10 @@ export const MAX_ENEMIES = 900;
 export const MAX_PROJECTILES = 600;
 export const MAX_GEMS = 900;
 
+/** 20분 최종 보스, 이후 선택형 오버타임은 25분부터 강화된다. */
+export const FINAL_BOSS_TIME = 20 * 60;
+export const OVERTIME_TIME = 25 * 60;
+
 /** 플레이어에서 이 거리보다 멀어진 적은 회수해서 재사용한다. */
 export const DESPAWN_RADIUS = 1400;
 

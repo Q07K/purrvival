@@ -32,6 +32,7 @@ export interface Enemy extends Poolable {
   knockY: number;
   flash: number;
   elite: boolean;
+  boss: boolean;
   sprite: Phaser.GameObjects.Image;
 }
 
@@ -182,6 +183,7 @@ export interface GameOverStats {
   kills: number;
   level: number;
   gold: number;
+  cleared?: boolean;
 }
 
 /** 일시정지 화면에 보여줄 현재 빌드 */
