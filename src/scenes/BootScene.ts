@@ -15,6 +15,7 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('asset:gem:sheet', 'assets/sprites/gem-rewards-sheet-v1.png', { frameWidth: 627, frameHeight: 627 });
     this.load.spritesheet('asset:event:sheet', 'assets/sprites/map-events-sheet-v1.png', { frameWidth: 627, frameHeight: 627 });
     this.load.spritesheet('asset:rare:sheet', 'assets/sprites/rare-choice-sheet-v1.png', { frameWidth: 627, frameHeight: 627 });
+    this.load.spritesheet('asset:burrow:sheet', 'assets/sprites/burrow-raider-mouse-sheet-v1.png', { frameWidth: 768, frameHeight: 512 });
     this.load.image('asset:bg:attic', 'assets/backgrounds/attic-moonlight-v1.png');
     this.load.image('asset:bg:cellar', 'assets/backgrounds/cheese-cellar-v1.png');
     this.load.image('asset:bg:garden', 'assets/backgrounds/moon-garden-v1.png');

@@ -3,7 +3,7 @@ import { VIEW } from '../config';
 import { EV, bus } from '../bus';
 import { TEX, getTheme } from '../theme';
 import { meta } from '../systems/MetaProgression';
-import type { Choice, GameOverStats, HudStats, PauseStats, RareChoice } from '../types';
+import type { Choice, GameOverStats, HudStats, MutationChoice, PauseStats, RareChoice } from '../types';
 
 const FONT = '"Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif';
 
@@ -22,10 +22,11 @@ export class UIScene extends Phaser.Scene {
   private overlay: Phaser.GameObjects.Container | null = null;
   private accent = 0x4fd1ff;
   private latestStats?: HudStats;
-  private overlayType?: 'levelup' | 'pause' | 'gameover';
+  private overlayType?: 'levelup' | 'pause' | 'gameover' | 'mutation';
   private levelupPayload?: { choices: Choice[]; level: number };
   private pauseStats?: PauseStats;
   private gameOverStats?: GameOverStats;
+  private mutationPayload?: { choices: MutationChoice[]; stage: number };
   private rate = 1;
   private levelupInputReady = true;
   private rareInputReady = true;
@@ -85,6 +86,7 @@ export class UIScene extends Phaser.Scene {
     bus.on(EV.levelup, this.onLevelUp, this);
     bus.on(EV.rareChoice, this.onRareChoice, this);
     bus.on(EV.mapEvent, this.onMapEvent, this);
+    bus.on(EV.mutationChoice, this.onMutationChoice, this);
     bus.on(EV.pause, this.onPause, this);
     bus.on(EV.speed, this.onRate, this);
     bus.on(EV.gameover, this.onGameOver, this);
@@ -97,6 +99,7 @@ export class UIScene extends Phaser.Scene {
       bus.off(EV.levelup, this.onLevelUp, this);
       bus.off(EV.rareChoice, this.onRareChoice, this);
       bus.off(EV.mapEvent, this.onMapEvent, this);
+      bus.off(EV.mutationChoice, this.onMutationChoice, this);
       bus.off(EV.pause, this.onPause, this);
       bus.off(EV.speed, this.onRate, this);
       bus.off(EV.gameover, this.onGameOver, this);
@@ -152,6 +155,7 @@ export class UIScene extends Phaser.Scene {
     if (this.overlayType === 'levelup' && this.levelupPayload) this.onLevelUp(this.levelupPayload);
     if (this.overlayType === 'pause' && this.pauseStats) this.onPause(this.pauseStats);
     if (this.overlayType === 'gameover' && this.gameOverStats) this.onGameOver(this.gameOverStats);
+    if (this.overlayType === 'mutation' && this.mutationPayload) this.onMutationChoice(this.mutationPayload);
   }
 
   /* ---------------------------------------------------------------- */
@@ -351,6 +355,30 @@ export class UIScene extends Phaser.Scene {
     this.tweens.add({ targets: text, alpha: 1, y: 112, duration: 260, yoyo: true, hold: 2200, onComplete: () => text.destroy() });
   }
 
+  private onMutationChoice(payload: { choices: MutationChoice[]; stage: number }) {
+    this.clearOverlay();
+    this.overlayType = 'mutation';
+    this.mutationPayload = payload;
+    const c = this.add.container(0, 0).setDepth(200);
+    this.overlay = c;
+    const dim = this.add.graphics().fillStyle(0x08030d, 0.9).fillRect(0, 0, VIEW.width, VIEW.height);
+    c.add(dim);
+    const scale = Phaser.Math.Clamp(Math.min(VIEW.width / 960, VIEW.height / 540, (VIEW.width - 24) / 590), 0.5, 1);
+    const w = 190 * scale; const h = 190 * scale; const gap = 10 * scale;
+    const start = VIEW.width / 2 - (w * 3 + gap * 2) / 2;
+    c.add(this.add.text(VIEW.width / 2, 78 * scale, `오버타임 변이 ${payload.stage}`, { fontFamily: FONT, fontSize: `${36 * scale}px`, color: '#ff8994' }).setOrigin(0.5));
+    c.add(this.add.text(VIEW.width / 2, 114 * scale, '위험을 선택해 기록 보정을 높이세요', { fontFamily: FONT, fontSize: `${14 * scale}px`, color: '#d5a5b0' }).setOrigin(0.5));
+    payload.choices.forEach((choice, i) => {
+      const card = this.add.container(start + i * (w + gap), VIEW.height / 2 - h / 2 + 24 * scale);
+      card.add(this.add.graphics().fillStyle(0x241521, 1).fillRoundedRect(0, 0, w, h, 12).lineStyle(2, 0xa64d5c, 1).strokeRoundedRect(0, 0, w, h, 12));
+      card.add(this.add.text(w / 2, 52 * scale, choice.name, { fontFamily: FONT, fontSize: `${20 * scale}px`, color: '#fff0f1', align: 'center', wordWrap: { width: w - 18 } }).setOrigin(0.5));
+      card.add(this.add.text(w / 2, 122 * scale, choice.detail, { fontFamily: FONT, fontSize: `${13 * scale}px`, color: '#e5bdc5', align: 'center', wordWrap: { width: w - 22 } }).setOrigin(0.5));
+      const zone = this.add.zone(0, 0, w, h).setOrigin(0).setInteractive({ useHandCursor: true });
+      zone.on('pointerup', () => { this.clearOverlay(); bus.emit(EV.mutationPicked, choice); });
+      card.add(zone); c.add(card);
+    });
+  }
+
   /* ---------------------------------------------------------------- */
   /* 일시정지                                                           */
   /* ---------------------------------------------------------------- */
@@ -519,7 +547,7 @@ export class UIScene extends Phaser.Scene {
         )
         .setOrigin(0.5),
     );
-    panel.add(this.add.text(VIEW.width / 2, 294, `개인 기록 #${s.recordRank || '-'}   ·   최고 ${fmtTime(s.bestTime ?? s.time)}`, { fontFamily: FONT, fontSize: '14px', color: '#ffd36b' }).setOrigin(0.5));
+    panel.add(this.add.text(VIEW.width / 2, 294, `점수 ${s.score ?? 0}   ·   변이 ${s.mutations ?? 0}   ·   개인 기록 #${s.recordRank || '-'}`, { fontFamily: FONT, fontSize: '14px', color: '#ffd36b' }).setOrigin(0.5));
 
     const restart = () => {
       this.clearOverlay();

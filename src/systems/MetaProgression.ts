@@ -8,29 +8,31 @@ export const META_UPGRADES = [
   { id: 'healDrop', name: '행운의 방울', desc: '회복 하트 확률 +0.7%', base: 220, unlock: 2 },
   { id: 'healPower', name: '따뜻한 간식', desc: '회복량 +12%', base: 220, unlock: 3 },
   { id: 'xp', name: '성장의 수염', desc: '젬 경험치 +8%', base: 200, unlock: 3 },
-  { id: 'projectile', name: '재빠른 발톱', desc: '투사체 속도 +8%', base: 300, unlock: 6 },
+  { id: 'projectile', name: '재빠른 발톱', desc: '투사체 속도·수명 +8%', base: 300, unlock: 6 },
   { id: 'auraSpeed', name: '파동의 숨결', desc: '장판 공격 속도 +8%', base: 300, unlock: 6 },
   { id: 'orbitSpeed', name: '빙글 꼬리', desc: '궤도 회전 속도 +8%', base: 320, unlock: 7 },
   { id: 'area', name: '긴 수염', desc: '무기 범위 +6%', base: 320, unlock: 7 },
+  { id: 'attackSpeed', name: '민첩한 앞발', desc: '모든 무기 공격 주기 -4%', base: 350, unlock: 8 },
+  { id: 'rarePower', name: '희귀한 실', desc: '희귀 제단 축복 효과 +8%', base: 420, unlock: 10 },
 ] as const;
 
 export type MetaUpgradeId = (typeof META_UPGRADES)[number]['id'];
 type UnlockId = 'dog' | 'rate15' | 'rate2' | 'rate3';
-export type RunRecord = { time: number; kills: number; level: number; cleared: boolean };
+export type RunRecord = { time: number; kills: number; level: number; cleared: boolean; score: number; mutations: number };
 
 const RANK_GOLD = [0, 800, 2400, 5000, 8500, 13000, 19000, 27000, 37000, 50000, 66000, 85000, 108000, 136000, 170000, 210000, 260000, 320000, 390000, 470000];
 const UNLOCKS: Record<UnlockId, { name: string; desc: string; cost: number; level: number }> = {
   rate15: { name: '1.5× 배속', desc: '전투 배속 1.5× 해금', cost: 1200, level: 3 },
   dog: { name: '강아지', desc: '펄스로 시작하는 강아지 해금', cost: 2500, level: 5 },
-  rate2: { name: '2× 배속', desc: '전투 배속 2× 해금', cost: 4000, level: 10 },
-  rate3: { name: '3× 배속', desc: '전투 배속 3× 해금', cost: 10000, level: 20 },
+  rate2: { name: '2× 배속', desc: '전투 배속 2× 해금', cost: 4000, level: 7 },
+  rate3: { name: '3× 배속', desc: '전투 배속 3× 해금', cost: 10000, level: 12 },
 };
 
 type SaveData = { gold: number; totalGold: number; upgrades: Record<MetaUpgradeId, number>; unlocks: Record<UnlockId, boolean>; records: RunRecord[] };
 const KEY = 'cat-survivors-meta-v1';
 const fresh = (): SaveData => ({
   gold: 0, totalGold: 0,
-  upgrades: { hp: 0, speed: 0, damage: 0, magnet: 0, healDrop: 0, healPower: 0, xp: 0, projectile: 0, auraSpeed: 0, orbitSpeed: 0, area: 0 },
+  upgrades: { hp: 0, speed: 0, damage: 0, magnet: 0, healDrop: 0, healPower: 0, xp: 0, projectile: 0, auraSpeed: 0, orbitSpeed: 0, area: 0, attackSpeed: 0, rarePower: 0 },
   unlocks: { dog: false, rate15: false, rate2: false, rate3: false },
   records: [],
 });
@@ -41,7 +43,9 @@ class MetaProgression {
   private load(): SaveData {
     try {
       const saved = JSON.parse(localStorage.getItem(KEY) ?? 'null');
-      return saved ? { ...fresh(), ...saved, upgrades: { ...fresh().upgrades, ...saved.upgrades }, unlocks: { ...fresh().unlocks, ...saved.unlocks } } : fresh();
+      const data = saved ? { ...fresh(), ...saved, upgrades: { ...fresh().upgrades, ...saved.upgrades }, unlocks: { ...fresh().unlocks, ...saved.unlocks } } : fresh();
+      data.records = (data.records ?? []).map((run: RunRecord) => ({ ...run, mutations: run.mutations ?? 0, score: run.score ?? Math.floor(run.kills + run.time * 10) }));
+      return data;
     } catch { return fresh(); }
   }
 
@@ -87,7 +91,7 @@ class MetaProgression {
 
   record(run: RunRecord) {
     const records = [...this.data.records, run]
-      .sort((a, b) => b.time - a.time || Number(b.cleared) - Number(a.cleared) || b.kills - a.kills)
+      .sort((a, b) => b.score - a.score || b.time - a.time || b.kills - a.kills)
       .slice(0, 5);
     this.data.records = records;
     this.save();
@@ -107,13 +111,16 @@ class MetaProgression {
     p.magnet *= 1 + lv('magnet') * 0.12;
     p.xpMult = 1 + lv('xp') * 0.08;
     p.projectileSpeedMult = 1 + lv('projectile') * 0.08;
+    p.projectileLifeMult = 1 + lv('projectile') * 0.08;
+    p.cooldownMult *= 1 / (1 + lv('attackSpeed') * 0.04);
     p.auraCooldownMult = 1 / (1 + lv('auraSpeed') * 0.08);
     p.orbitSpeedMult *= 1 + lv('orbitSpeed') * 0.08;
     p.areaMult *= 1 + lv('area') * 0.06;
   }
 
-  healDropChance() { return 0.004 + this.levelOf('healDrop') * 0.007; }
+  healDropChance() { return 0.002 + this.levelOf('healDrop') * 0.005; }
   healAmount() { return Math.round(14 * (1 + this.levelOf('healPower') * 0.12)); }
+  rarePower() { return 1 + this.levelOf('rarePower') * 0.08; }
 }
 
 export const meta = new MetaProgression();

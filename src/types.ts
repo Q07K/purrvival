@@ -33,6 +33,10 @@ export interface Enemy extends Poolable {
   flash: number;
   elite: boolean;
   boss: boolean;
+  /** 이벤트 적의 드롭 젬 등급 보정(0=일반, 1=한 단계 상승) */
+  gemTier: number;
+  /** 이벤트 전멸 보상 추적용 */
+  eventTag?: 'cart' | 'burrow';
   sprite: Phaser.GameObjects.Image;
 }
 
@@ -89,6 +93,7 @@ export interface PlayerState {
   areaMult: number;
   xpMult: number;
   projectileSpeedMult: number;
+  projectileLifeMult: number;
   auraCooldownMult: number;
   orbitSpeedMult: number;
   magnet: number;
@@ -174,6 +179,12 @@ export interface RareChoice {
   frame: number;
 }
 
+export interface MutationChoice {
+  id: 'march' | 'redMoon' | 'harvest';
+  name: string;
+  detail: string;
+}
+
 export interface HudStats {
   hp: number;
   maxHp: number;
@@ -193,6 +204,8 @@ export interface GameOverStats {
   cleared?: boolean;
   recordRank?: number;
   bestTime?: number;
+  score?: number;
+  mutations?: number;
 }
 
 /** 일시정지 화면에 보여줄 현재 빌드 */

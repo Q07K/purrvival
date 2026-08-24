@@ -39,6 +39,12 @@ export const ELITE: EnemyKind = {
   elite: true, from: 0, weight: 0, cluster: 1,
 };
 
+/** 굴 붕괴에서만 나오는 고체력 돌격 쥐. */
+export const BURROW_RAIDER: EnemyKind = {
+  id: 'burrow', hp: 24, speed: 60, damage: 8, radius: 13, xp: 1,
+  elite: false, from: 0, weight: 0, cluster: 1,
+};
+
 /** 20분 완주를 막는 쥐 군주 — 기존 엘리트 텍스처를 크게 재사용한다. */
 export const FINAL_BOSS: EnemyKind = {
   ...ELITE, hp: 2200, speed: 38, damage: 34, radius: 48, xp: 300,

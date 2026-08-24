@@ -16,9 +16,12 @@ export const EV = {
   rareChoice: 'rareChoice',
   /** 5분 맵 이벤트 안내 */
   mapEvent: 'mapEvent',
+  /** 오버타임 변이 선택 */
+  mutationChoice: 'mutationChoice',
   /** UI에서 카드 선택 완료 */
   picked: 'picked',
   rarePicked: 'rarePicked',
+  mutationPicked: 'mutationPicked',
   /** ESC 일시정지 */
   pause: 'pause',
   /** UI 버튼의 일시정지 요청 */

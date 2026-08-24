@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
 import {
   CELL_SIZE, DESPAWN_RADIUS, KNOCKBACK_DECAY, MAX_ENEMIES, MAX_GEMS,
-  MAX_PROJECTILES, PLAYER, VIEW, GEM, difficultyScale, xpForLevel, FINAL_BOSS_TIME, OVERTIME_TIME,
+  MAX_PROJECTILES, PLAYER, VIEW, GEM, difficultyScale, xpForLevel, OVERTIME_TIME,
 } from '../config';
 import { EV, bus } from '../bus';
-import { ELITE, ELITE_INTERVAL, ENEMY_KINDS, FINAL_BOSS } from '../data/enemies';
+import { BURROW_RAIDER, ELITE, ELITE_INTERVAL, ENEMY_KINDS, FINAL_BOSS } from '../data/enemies';
 import type { EnemyKind } from '../data/enemies';
 import { Pool } from '../systems/Pool';
 import { Progression } from '../systems/Progression';
@@ -12,7 +12,7 @@ import { SpatialHash } from '../systems/SpatialHash';
 import { sfx } from '../systems/Sfx';
 import { meta } from '../systems/MetaProgression';
 import { TEX, buildTextures, cycleTheme, getTheme } from '../theme';
-import type { Choice, Enemy, Gem, HudStats, PlayerState, Projectile, RareChoice, WeaponStats } from '../types';
+import type { Choice, Enemy, Gem, HudStats, MutationChoice, PlayerState, Projectile, RareChoice, WeaponStats } from '../types';
 
 const DEPTH = { ground: 0, gem: 5, aura: 8, enemy: 10, player: 20, proj: 30 };
 const BACKGROUNDS = ['asset:bg:attic', 'asset:bg:cellar', 'asset:bg:garden', 'asset:bg:rooftop', 'asset:bg:toyroom'];
@@ -41,6 +41,9 @@ export class GameScene extends Phaser.Scene {
   private projectileTrails?: Phaser.GameObjects.Graphics;
   private eventSprite?: Phaser.GameObjects.Image;
   private eventFx?: Phaser.GameObjects.Graphics;
+  private shrine?: { x: number; y: number; expires: number };
+  private cartRemaining = 0;
+  private burrowBudget = 0;
 
   private elapsed = 0;
   private rate = 1;
@@ -51,7 +54,18 @@ export class GameScene extends Phaser.Scene {
   private nextEliteAt = ELITE_INTERVAL;
   private nextMapEventAt = 5 * 60;
   private mapEventIndex = 0;
-  private finalBossSpawned = false;
+  private nextMutationAt = OVERTIME_TIME;
+  private mutationCount = 0;
+  private spawnMult = 1;
+  private enemyHpMult = 1;
+  private enemyDamageMult = 1;
+  private goldMult = 1;
+  private gemXpMult = 1;
+  private rareDamageMult = 1;
+  private rareHpMult = 1;
+  private rareSpeedMult = 1;
+  private rareMagnetMult = 1;
+  private rareCooldownMult = 1;
   private cleared = false;
   private overtime = false;
   private earnedGold = 0;
@@ -87,7 +101,21 @@ export class GameScene extends Phaser.Scene {
     this.nextEliteAt = ELITE_INTERVAL;
     this.nextMapEventAt = 5 * 60;
     this.mapEventIndex = 0;
-    this.finalBossSpawned = false;
+    this.nextMutationAt = OVERTIME_TIME;
+    this.mutationCount = 0;
+    this.spawnMult = 1;
+    this.enemyHpMult = 1;
+    this.enemyDamageMult = 1;
+    this.goldMult = 1;
+    this.gemXpMult = 1;
+    this.rareDamageMult = 1;
+    this.rareHpMult = 1;
+    this.rareSpeedMult = 1;
+    this.rareMagnetMult = 1;
+    this.rareCooldownMult = 1;
+    this.shrine = undefined;
+    this.cartRemaining = 0;
+    this.burrowBudget = 0;
     this.cleared = false;
     this.overtime = false;
     this.earnedGold = 0;
@@ -112,7 +140,7 @@ export class GameScene extends Phaser.Scene {
       level: 1, xp: 0, xpNext: xpForLevel(1),
       invuln: 0,
       speed: PLAYER.baseSpeed,
-      damageMult: 1, cooldownMult: 1, areaMult: 1, xpMult: 1, projectileSpeedMult: 1, auraCooldownMult: 1, orbitSpeedMult: 1,
+      damageMult: 1, cooldownMult: 1, areaMult: 1, xpMult: 1, projectileSpeedMult: 1, projectileLifeMult: 1, auraCooldownMult: 1, orbitSpeedMult: 1,
       magnet: PLAYER.magnet, armor: 0,
     };
 
@@ -163,6 +191,7 @@ export class GameScene extends Phaser.Scene {
 
     bus.on(EV.picked, this.onPicked, this);
     bus.on(EV.rarePicked, this.onRarePicked, this);
+    bus.on(EV.mutationPicked, this.onMutationPicked, this);
     bus.on(EV.restart, this.onRestart, this);
     bus.on(EV.resume, this.onResume, this);
     bus.on(EV.speed, this.onRate, this);
@@ -173,6 +202,7 @@ export class GameScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       bus.off(EV.picked, this.onPicked, this);
       bus.off(EV.rarePicked, this.onRarePicked, this);
+      bus.off(EV.mutationPicked, this.onMutationPicked, this);
       bus.off(EV.restart, this.onRestart, this);
       bus.off(EV.resume, this.onResume, this);
       bus.off(EV.speed, this.onRate, this);
@@ -211,7 +241,7 @@ export class GameScene extends Phaser.Scene {
       index, active: false, uid: 0, kind: 'grunt',
       x: 0, y: 0, hp: 1, maxHp: 1, speed: 0, damage: 0, radius: 10, xp: 1,
       hitAt: new Float64Array(8),
-      knockX: 0, knockY: 0, flash: 0, elite: false, boss: false,
+      knockX: 0, knockY: 0, flash: 0, elite: false, boss: false, gemTier: 0,
       sprite: this.add.image(0, 0, TEX.enemy('grunt')).setDepth(DEPTH.enemy).setVisible(false),
     };
   }
@@ -284,6 +314,7 @@ export class GameScene extends Phaser.Scene {
     this.stepPlayer(dt);
     this.stepSpawning(dt);
     this.stepMapEvents();
+    this.stepShrine();
     this.stepEnemies(dt);
 
     // 적이 움직인 뒤에 해시를 다시 세워야 충돌 판정이 정확하다.
@@ -337,7 +368,7 @@ export class GameScene extends Phaser.Scene {
 
   private stepSpawning(dt: number) {
     const d = difficultyScale(this.elapsed);
-    this.spawnCredit += d.rate * dt;
+    this.spawnCredit += d.rate * this.spawnMult * dt;
 
     while (this.spawnCredit >= 1) {
       if (this.enemies.live >= MAX_ENEMIES) {
@@ -360,12 +391,6 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    if (!this.finalBossSpawned && this.elapsed >= FINAL_BOSS_TIME) {
-      this.finalBossSpawned = true;
-      const point = this.spawnPoint(180);
-      this.spawnEnemy(FINAL_BOSS, point.x, point.y, d.hp, d.speed, true);
-    }
-
     if (this.elapsed >= this.nextEliteAt) {
       this.nextEliteAt += this.overtime && this.elapsed >= OVERTIME_TIME ? 30 : ELITE_INTERVAL;
       const point = this.spawnPoint(120);
@@ -381,6 +406,14 @@ export class GameScene extends Phaser.Scene {
 
   /** 5분마다 전투 리듬을 바꾸는 맵 이벤트. 4번째는 최종 보스와 함께 연출만 추가한다. */
   private stepMapEvents() {
+    if (this.overtime) {
+      if (this.elapsed < this.nextMutationAt) return;
+      this.nextMutationAt += 5 * 60;
+      this.awaitingChoice = true;
+      bus.emit(EV.mutationChoice, { choices: this.mutationChoices(), stage: this.mutationCount + 1 });
+      this.scene.pause();
+      return;
+    }
     if (this.elapsed < this.nextMapEventAt) return;
     this.nextMapEventAt += 5 * 60;
     const kind = this.mapEventIndex++ % 4;
@@ -391,39 +424,87 @@ export class GameScene extends Phaser.Scene {
     bus.emit(EV.mapEvent, ['치즈 수레 습격', '굴 붕괴', '털실 제단', '달빛 사냥'][kind]);
     const d = difficultyScale(this.elapsed);
 
-    if (kind === 0) {
-      for (let i = 0; i < 5; i++) this.spawnEnemy(ELITE, x + Math.cos(i * 1.26) * 90, y + Math.sin(i * 1.26) * 90, d.hp, d.speed);
-      for (let i = 0; i < 4; i++) this.spawnGem(x + (Math.random() - 0.5) * 70, y + (Math.random() - 0.5) * 70, 5, true);
-    } else if (kind === 1) {
-      const swarm = ENEMY_KINDS[0];
-      for (let i = 0; i < 24; i++) this.spawnEnemy(swarm, x + Math.cos(i * Math.PI * 2 / 24) * 45, y + Math.sin(i * Math.PI * 2 / 24) * 45, d.hp, d.speed);
-    } else if (kind === 2) {
-      this.awaitingChoice = true;
-      bus.emit(EV.rareChoice, { choices: this.rareChoices() });
-      this.scene.pause();
-    }
+    if (kind === 0) this.startCheeseCart(x, y, d);
+    else if (kind === 1) this.startBurrow(x, y);
+    else if (kind === 2) this.shrine = { x, y, expires: this.elapsed + 15 };
+    else this.startMoonHunt(x, y);
   }
 
   private showMapEvent(frame: number, x: number, y: number) {
     this.eventSprite?.destroy();
     this.eventFx?.destroy();
-    this.eventSprite = this.add.image(x, y, 'asset:event:sheet', frame).setDepth(DEPTH.aura).setScale(0.22);
-    this.eventFx = this.add.graphics().setDepth(DEPTH.aura - 1);
+    const sprite = this.eventSprite = this.add.image(x, y, 'asset:event:sheet', frame).setDepth(DEPTH.aura).setScale(0.22);
+    const fx = this.eventFx = this.add.graphics().setDepth(DEPTH.aura - 1);
     const color = [0xffd36b, 0xff5b5b, 0xff9eb4, 0x78b8ff][frame];
-    this.eventFx.lineStyle(3, color, 0.7).strokeCircle(x, y, frame === 1 ? 150 : 110);
-    this.tweens.add({ targets: this.eventSprite, scale: 0.25, duration: 550, yoyo: true, repeat: 3 });
+    fx.lineStyle(3, color, 0.7).strokeCircle(x, y, frame === 1 ? 150 : frame === 3 ? 260 : 110);
+    this.tweens.add({ targets: sprite, scale: 0.25, duration: 550, yoyo: true, repeat: 3 });
     this.time.delayedCall(15000, () => {
-      this.eventSprite?.destroy(); this.eventSprite = undefined;
-      this.eventFx?.destroy(); this.eventFx = undefined;
+      if (this.eventSprite === sprite) { sprite.destroy(); this.eventSprite = undefined; }
+      if (this.eventFx === fx) { fx.destroy(); this.eventFx = undefined; }
     });
   }
 
+  private startCheeseCart(x: number, y: number, d: ReturnType<typeof difficultyScale>) {
+    this.cartRemaining = Math.min(5, MAX_ENEMIES - this.enemies.live);
+    if (!this.cartRemaining) return;
+    this.spawnEnemy(ELITE, x, y, d.hp * 1.8, d.speed, false, 0, 'cart');
+    for (let i = 1; i < this.cartRemaining; i++) {
+      const a = i * Math.PI * 2 / (this.cartRemaining - 1);
+      this.spawnEnemy(ENEMY_KINDS[2], x + Math.cos(a) * 70, y + Math.sin(a) * 70, d.hp, d.speed, false, 0, 'cart');
+    }
+  }
+
+  private startBurrow(x: number, y: number) {
+    const cap = this.enemies.live >= 700 ? 80 : 100;
+    this.burrowBudget = Math.max(0, Math.min(cap, MAX_ENEMIES - this.enemies.live - 1));
+    this.eventFx?.clear().lineStyle(4, 0xff5a5a, 0.9).strokeCircle(x, y, 150);
+    this.tweens.add({ targets: this.eventSprite, angle: { from: -3, to: 3 }, duration: 140, yoyo: true, repeat: 18 });
+    this.time.delayedCall(3000, () => this.spawnBurrowWave(x, y, Math.ceil(this.burrowBudget / 2), false));
+    this.time.delayedCall(8000, () => this.spawnBurrowWave(x, y, Math.floor(this.burrowBudget / 2), true));
+    this.time.delayedCall(13000, () => {
+      const d = difficultyScale(this.elapsed);
+      this.spawnEnemy(ELITE, x, y, d.hp, d.speed, false, 1, 'burrow');
+    });
+  }
+
+  private spawnBurrowWave(x: number, y: number, count: number, fan: boolean) {
+    const d = difficultyScale(this.elapsed);
+    const aim = Math.atan2(this.player.y - y, this.player.x - x);
+    for (let i = 0; i < count && this.enemies.live < MAX_ENEMIES; i++) {
+      const a = fan ? aim + (i / Math.max(1, count - 1) - 0.5) * Math.PI * 0.85 : i * Math.PI * 2 / count;
+      this.spawnEnemy(BURROW_RAIDER, x + Math.cos(a) * 32, y + Math.sin(a) * 32, d.hp, d.speed, false, 1);
+    }
+  }
+
+  private startMoonHunt(x: number, y: number) {
+    this.time.delayedCall(3000, () => {
+      const d = difficultyScale(this.elapsed);
+      this.spawnEnemy(FINAL_BOSS, x, y, d.hp, d.speed, true);
+    });
+  }
+
+  private stepShrine() {
+    if (!this.shrine) return;
+    const shrine = this.shrine;
+    if (this.elapsed >= shrine.expires) { this.shrine = undefined; return; }
+    const dx = shrine.x - this.player.x;
+    const dy = shrine.y - this.player.y;
+    if (dx * dx + dy * dy > 90 * 90) return;
+    this.shrine = undefined;
+    this.eventSprite?.destroy(); this.eventSprite = undefined;
+    this.eventFx?.destroy(); this.eventFx = undefined;
+    this.awaitingChoice = true;
+    bus.emit(EV.rareChoice, { choices: this.rareChoices() });
+    this.scene.pause();
+  }
+
   private rareChoices(): RareChoice[] {
+    const power = meta.rarePower();
     const choices: RareChoice[] = [
-      { id: 'crown', name: '치즈 왕관', detail: '이번 런 모든 피해 +35%', frame: 0 },
-      { id: 'heart', name: '성스러운 털실', detail: 'HP 전부 회복 · 최대 HP +25%', frame: 1 },
-      { id: 'moon', name: '달빛 발자국', detail: '이동 속도 +20% · 획득 범위 +35%', frame: 2 },
-      { id: 'comet', name: '무지개 실타래', detail: '모든 무기 공격 간격 -25%', frame: 3 },
+      { id: 'crown', name: '치즈 왕관', detail: `이번 런 모든 피해 +${Math.round(35 * power)}%`, frame: 0 },
+      { id: 'heart', name: '성스러운 털실', detail: `HP 전부 회복 · 최대 HP +${Math.round(25 * power)}%`, frame: 1 },
+      { id: 'moon', name: '달빛 발자국', detail: `이동 속도 +${Math.round(20 * power)}% · 획득 범위 +${Math.round(35 * power)}%`, frame: 2 },
+      { id: 'comet', name: '무지개 실타래', detail: `모든 무기 공격 간격 -${Math.round(25 * power)}%`, frame: 3 },
     ];
     return choices.sort(() => Math.random() - 0.5).slice(0, 3);
   }
@@ -455,7 +536,10 @@ export class GameScene extends Phaser.Scene {
     return avail[0];
   }
 
-  private spawnEnemy(kind: EnemyKind, x: number, y: number, hpScale: number, spScale: number, boss = false) {
+  private spawnEnemy(
+    kind: EnemyKind, x: number, y: number, hpScale: number, spScale: number,
+    boss = false, gemTier = 0, eventTag?: 'cart' | 'burrow',
+  ) {
     const e = this.enemies.spawn();
     if (!e) return;
 
@@ -463,23 +547,34 @@ export class GameScene extends Phaser.Scene {
     e.kind = kind.id;
     e.x = x;
     e.y = y;
-    e.maxHp = kind.hp * hpScale;
+    e.maxHp = kind.hp * hpScale * this.enemyHpMult;
     e.hp = e.maxHp;
     e.speed = kind.speed * spScale;
-    e.damage = kind.damage;
+    e.damage = kind.damage * this.enemyDamageMult;
     e.radius = kind.radius;
     e.xp = kind.xp;
     e.elite = kind.elite;
     e.boss = boss;
+    e.gemTier = gemTier;
+    e.eventTag = eventTag;
     e.knockX = 0;
     e.knockY = 0;
     e.flash = 0;
     e.hitAt.fill(0);
 
-    e.sprite.setTexture(TEX.enemy(kind.id));
-    this.scaleTo(e.sprite, this.enemyDisplaySize(kind.id, e.radius));
+    e.sprite.setTexture(kind.id === 'burrow' ? 'asset:burrow:sheet' : TEX.enemy(kind.id));
+    if (kind.id === 'burrow') e.sprite.setScale(40 / 768);
+    else this.scaleTo(e.sprite, this.enemyDisplaySize(kind.id, e.radius));
     e.sprite.clearTint();
     e.sprite.setVisible(true);
+  }
+
+  private mutationChoices(): MutationChoice[] {
+    return [
+      { id: 'march', name: '쥐 대행진', detail: '적 생성 +35% · 골드/점수 보정 +25%' },
+      { id: 'redMoon', name: '붉은 달', detail: '적 피해 +25% · 엘리트가 빠르게 등장 · 보정 +30%' },
+      { id: 'harvest', name: '풍요의 달', detail: '적 HP +25% · 젬 경험치 +50% · 보정 +20%' },
+    ];
   }
 
   private stepEnemies(dt: number) {
@@ -900,15 +995,31 @@ export class GameScene extends Phaser.Scene {
 
     if (e.hp <= 0) {
       sfx.play('kill');
-      this.spawnGem(e.x, e.y, e.xp, e.elite);
+      this.spawnGem(e.x, e.y, e.xp * (e.gemTier ? 5 : 1), e.elite);
       if (this.player.hp < this.player.maxHp && Math.random() < meta.healDropChance()) {
         this.spawnGem(e.x, e.y, 0, false, true);
       }
       this.kills++;
+      if (e.eventTag === 'cart' && --this.cartRemaining <= 0) this.finishCart(e.x, e.y);
+      if (e.eventTag === 'burrow') this.finishBurrow(e.x, e.y);
       this.enemies.release(e);
-      if (e.boss) this.onClear();
+      if (e.boss) this.onClear(e.x, e.y);
     }
     else sfx.play('hit');
+  }
+
+  private finishCart(x: number, y: number) {
+    for (let i = 0; i < 3; i++) this.spawnGem(x + (Math.random() - 0.5) * 60, y + (Math.random() - 0.5) * 60, 25, false);
+    if (Math.random() < 0.25) this.spawnGem(x, y, 0, false, true);
+    const gold = Math.floor(150 * this.goldMult);
+    this.earnedGold += gold;
+    meta.earn(gold);
+    bus.emit(EV.mapEvent, `치즈 수레 보상 +${gold}G`);
+  }
+
+  private finishBurrow(x: number, y: number) {
+    for (let i = 0; i < 2; i++) this.spawnGem(x + (Math.random() - 0.5) * 40, y + (Math.random() - 0.5) * 40, 25, false);
+    if (Math.random() < 0.35) this.spawnGem(x, y, 0, false, true);
   }
 
   private spawnGem(x: number, y: number, xp: number, big: boolean, heal = false) {
@@ -1049,7 +1160,7 @@ export class GameScene extends Phaser.Scene {
 
   private gainXp(amount: number) {
     const p = this.player;
-    p.xp += amount * p.xpMult;
+    p.xp += amount * p.xpMult * this.gemXpMult;
     while (p.xp >= p.xpNext) {
       p.xp -= p.xpNext;
       p.level++;
@@ -1110,7 +1221,8 @@ export class GameScene extends Phaser.Scene {
       const e = es[i];
       if (!e.active) continue;
       const tex = TEX.enemyWalk(e.kind, walkFrame);
-      if (e.sprite.texture.key !== tex) e.sprite.setTexture(tex);
+      if (e.kind === 'burrow') e.sprite.setTexture('asset:burrow:sheet', walkFrame);
+      else if (e.sprite.texture.key !== tex) e.sprite.setTexture(tex);
       // 쥐 원본도 왼쪽을 향한다. 플레이어가 오른쪽에 있을 때만 뒤집는다.
       e.sprite.setFlipX(this.player.x > e.x);
       e.sprite.setPosition(e.x, e.y);
@@ -1160,17 +1272,42 @@ export class GameScene extends Phaser.Scene {
     if (choice.kind === 'collab') this.clearWeaponVisuals();
     sfx.play('pickup');
     this.prog.apply(choice, this.player);
+    this.applyRareBonuses();
     this.pendingLevels--;
     this.awaitingChoice = false;
     this.scene.resume();
   }
 
   private onRarePicked(choice: RareChoice) {
-    if (choice.id === 'crown') this.player.damageMult *= 1.35;
-    if (choice.id === 'heart') { this.player.maxHp *= 1.25; this.player.hp = this.player.maxHp; }
-    if (choice.id === 'moon') { this.player.speed *= 1.2; this.player.magnet *= 1.35; }
-    if (choice.id === 'comet') this.player.cooldownMult *= 0.75;
+    const power = meta.rarePower();
+    if (choice.id === 'crown') this.rareDamageMult *= 1 + 0.35 * power;
+    if (choice.id === 'heart') this.rareHpMult *= 1 + 0.25 * power;
+    if (choice.id === 'moon') { this.rareSpeedMult *= 1 + 0.2 * power; this.rareMagnetMult *= 1 + 0.35 * power; }
+    if (choice.id === 'comet') this.rareCooldownMult *= 1 - 0.25 * power;
+    this.prog.applyPassives(this.player);
+    this.applyRareBonuses(choice.id === 'heart');
     this.awaitingChoice = false;
+    this.scene.resume();
+  }
+
+  private applyRareBonuses(fullHeal = false) {
+    const p = this.player;
+    const before = p.maxHp;
+    p.maxHp *= this.rareHpMult;
+    p.hp = fullHeal ? p.maxHp : Math.min(p.maxHp, p.hp + Math.max(0, p.maxHp - before));
+    p.damageMult *= this.rareDamageMult;
+    p.speed *= this.rareSpeedMult;
+    p.magnet *= this.rareMagnetMult;
+    p.cooldownMult *= this.rareCooldownMult;
+  }
+
+  private onMutationPicked(choice: MutationChoice) {
+    if (choice.id === 'march') { this.spawnMult *= 1.35; this.goldMult *= 1.25; }
+    if (choice.id === 'redMoon') { this.enemyDamageMult *= 1.25; this.goldMult *= 1.3; this.nextEliteAt = Math.min(this.nextEliteAt, this.elapsed + 15); }
+    if (choice.id === 'harvest') { this.enemyHpMult *= 1.25; this.gemXpMult *= 1.5; this.goldMult *= 1.2; }
+    this.mutationCount++;
+    this.awaitingChoice = false;
+    bus.emit(EV.mapEvent, `변이 ${this.mutationCount}: ${choice.name}`);
     this.scene.resume();
   }
 
@@ -1217,34 +1354,40 @@ export class GameScene extends Phaser.Scene {
   private onOvertime() {
     this.overtime = true;
     this.nextEliteAt = Math.min(this.nextEliteAt, this.elapsed + 30);
+    this.nextMutationAt = Math.max(OVERTIME_TIME, (Math.floor(this.elapsed / 300) + 1) * 300);
     this.scene.resume();
   }
 
   private onDeath() {
     this.dead = true;
-    const gold = Math.max(0, Math.floor(this.kills * 0.05 + this.elapsed * 0.5) - this.earnedGold);
+    const score = this.runScore();
+    const gold = Math.max(0, Math.floor((this.kills * 0.05 + this.elapsed * 0.5) * this.goldMult) - this.earnedGold);
     meta.earn(gold);
-    const recordRank = meta.record({ time: this.elapsed, kills: this.kills, level: this.player.level, cleared: false });
+    const recordRank = meta.record({ time: this.elapsed, kills: this.kills, level: this.player.level, cleared: false, score, mutations: this.mutationCount });
     bus.emit(EV.gameover, {
       time: this.elapsed,
       kills: this.kills,
       level: this.player.level,
       gold,
-      recordRank, bestTime: meta.bestTime(),
+      recordRank, bestTime: meta.bestTime(), score, mutations: this.mutationCount,
     });
     this.scene.pause();
   }
 
-  private onClear() {
+  private onClear(x = this.player.x, y = this.player.y) {
     if (this.cleared) return;
     this.cleared = true;
-    const gold = Math.floor(this.kills * 0.05 + this.elapsed * 0.5) + 1000;
+    for (let i = 0; i < 3; i++) this.spawnGem(x + (Math.random() - 0.5) * 70, y + (Math.random() - 0.5) * 70, 25, false);
+    const score = this.runScore();
+    const gold = Math.floor((this.kills * 0.05 + this.elapsed * 0.5 + 1000) * this.goldMult);
     this.earnedGold += gold;
     meta.earn(gold);
-    const recordRank = meta.record({ time: this.elapsed, kills: this.kills, level: this.player.level, cleared: true });
-    bus.emit(EV.gameover, { time: this.elapsed, kills: this.kills, level: this.player.level, gold, cleared: true, recordRank, bestTime: meta.bestTime() });
+    const recordRank = meta.record({ time: this.elapsed, kills: this.kills, level: this.player.level, cleared: true, score, mutations: this.mutationCount });
+    bus.emit(EV.gameover, { time: this.elapsed, kills: this.kills, level: this.player.level, gold, cleared: true, recordRank, bestTime: meta.bestTime(), score, mutations: this.mutationCount });
     this.scene.pause();
   }
+
+  private runScore() { return Math.floor((this.kills + this.elapsed * 10) * (1 + this.mutationCount * 0.25)); }
 
   private onRestart() {
     this.scene.resume();
@@ -1274,8 +1417,9 @@ export class GameScene extends Phaser.Scene {
     this.applyPlayerScale();
 
     for (const e of this.enemies.items) {
-      e.sprite.setTexture(TEX.enemy(e.kind));
-      this.scaleTo(e.sprite, this.enemyDisplaySize(e.kind, e.radius));
+      e.sprite.setTexture(e.kind === 'burrow' ? 'asset:burrow:sheet' : TEX.enemy(e.kind));
+      if (e.kind === 'burrow') e.sprite.setScale(40 / 768);
+      else this.scaleTo(e.sprite, this.enemyDisplaySize(e.kind, e.radius));
     }
     for (const g of this.gems.items) {
       this.refreshGemSprite(g);

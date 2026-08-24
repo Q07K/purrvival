@@ -53,7 +53,7 @@ export class Progression {
       damage: s.damage * p.damageMult * stackMult,
       cooldown: s.cooldown * p.cooldownMult * (w.def.behavior === 'aura' ? p.auraCooldownMult : 1),
       area: s.area * p.areaMult,
-      life: s.life * p.areaMult,
+      life: s.life * p.areaMult * p.projectileLifeMult,
       speed: projectile ? s.speed * p.projectileSpeedMult : w.def.behavior === 'orbit' ? s.speed * p.orbitSpeedMult : s.speed,
       stacks: w.stacks,
     };
@@ -75,6 +75,7 @@ export class Progression {
     p.magnet = PLAYER.magnet * (1 + 0.25 * lv('magnet'));
     p.xpMult = 1;
     p.projectileSpeedMult = 1;
+    p.projectileLifeMult = 1;
     p.auraCooldownMult = 1;
     p.orbitSpeedMult = 1 + lv('haste') * 0.08;
     p.armor = 2 * lv('armor');
