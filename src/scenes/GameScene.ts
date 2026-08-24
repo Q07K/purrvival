@@ -564,8 +564,9 @@ export class GameScene extends Phaser.Scene {
     e.flash = 0;
     e.hitAt.fill(0);
 
-    e.sprite.setTexture(kind.id === 'burrow' ? 'asset:burrow:sheet' : TEX.enemy(kind.id));
-    if (kind.id === 'burrow') e.sprite.setScale(80 / 768);
+    e.sprite.setTexture(boss ? 'asset:boss:sheet' : kind.id === 'burrow' ? 'asset:burrow:sheet' : TEX.enemy(kind.id));
+    if (boss) e.sprite.setScale(150 / 543);
+    else if (kind.id === 'burrow') e.sprite.setScale(80 / 768);
     else this.scaleTo(e.sprite, this.enemyDisplaySize(kind.id, e.radius));
     e.sprite.clearTint();
     e.sprite.setVisible(true);
@@ -1233,7 +1234,8 @@ export class GameScene extends Phaser.Scene {
       const e = es[i];
       if (!e.active) continue;
       const tex = TEX.enemyWalk(e.kind, walkFrame);
-      if (e.kind === 'burrow') e.sprite.setTexture('asset:burrow:sheet', walkFrame);
+      if (e.boss) e.sprite.setTexture('asset:boss:sheet', walkFrame);
+      else if (e.kind === 'burrow') e.sprite.setTexture('asset:burrow:sheet', walkFrame);
       else if (e.sprite.texture.key !== tex) e.sprite.setTexture(tex);
       // 쥐 원본도 왼쪽을 향한다. 플레이어가 오른쪽에 있을 때만 뒤집는다.
       e.sprite.setFlipX(this.player.x > e.x);
@@ -1435,8 +1437,9 @@ export class GameScene extends Phaser.Scene {
     this.applyPlayerScale();
 
     for (const e of this.enemies.items) {
-      e.sprite.setTexture(e.kind === 'burrow' ? 'asset:burrow:sheet' : TEX.enemy(e.kind));
-      if (e.kind === 'burrow') e.sprite.setScale(80 / 768);
+      e.sprite.setTexture(e.boss ? 'asset:boss:sheet' : e.kind === 'burrow' ? 'asset:burrow:sheet' : TEX.enemy(e.kind));
+      if (e.boss) e.sprite.setScale(150 / 543);
+      else if (e.kind === 'burrow') e.sprite.setScale(80 / 768);
       else this.scaleTo(e.sprite, this.enemyDisplaySize(e.kind, e.radius));
     }
     for (const g of this.gems.items) {
