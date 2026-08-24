@@ -3,7 +3,7 @@ import { VIEW } from '../config';
 import { EV, bus } from '../bus';
 import { TEX, getTheme } from '../theme';
 import { meta } from '../systems/MetaProgression';
-import type { Choice, GameOverStats, HudStats, PauseStats } from '../types';
+import type { Choice, GameOverStats, HudStats, PauseStats, RareChoice } from '../types';
 
 const FONT = '"Pretendard", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif';
 
@@ -28,6 +28,7 @@ export class UIScene extends Phaser.Scene {
   private gameOverStats?: GameOverStats;
   private rate = 1;
   private levelupInputReady = true;
+  private rareInputReady = true;
 
   constructor() {
     super({ key: 'UI', active: false });
@@ -82,6 +83,8 @@ export class UIScene extends Phaser.Scene {
 
     bus.on(EV.stats, this.onStats, this);
     bus.on(EV.levelup, this.onLevelUp, this);
+    bus.on(EV.rareChoice, this.onRareChoice, this);
+    bus.on(EV.mapEvent, this.onMapEvent, this);
     bus.on(EV.pause, this.onPause, this);
     bus.on(EV.speed, this.onRate, this);
     bus.on(EV.gameover, this.onGameOver, this);
@@ -92,6 +95,8 @@ export class UIScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       bus.off(EV.stats, this.onStats, this);
       bus.off(EV.levelup, this.onLevelUp, this);
+      bus.off(EV.rareChoice, this.onRareChoice, this);
+      bus.off(EV.mapEvent, this.onMapEvent, this);
       bus.off(EV.pause, this.onPause, this);
       bus.off(EV.speed, this.onRate, this);
       bus.off(EV.gameover, this.onGameOver, this);
@@ -308,6 +313,44 @@ export class UIScene extends Phaser.Scene {
     bus.emit(EV.picked, choice);
   }
 
+  private onRareChoice(payload: { choices: RareChoice[] }) {
+    this.clearOverlay();
+    const c = this.add.container(0, 0).setDepth(200);
+    this.overlay = c;
+    this.rareInputReady = !this.input.activePointer.isDown;
+    if (!this.rareInputReady) this.input.once('pointerup', () => this.time.delayedCall(0, () => {
+      if (this.overlay === c) this.rareInputReady = true;
+    }));
+    const dim = this.add.graphics().fillStyle(0x13091b, 0.88).fillRect(0, 0, VIEW.width, VIEW.height);
+    c.add(dim);
+    const scale = Phaser.Math.Clamp(Math.min(VIEW.width / 960, VIEW.height / 540), 0.58, 1.1);
+    c.add(this.add.text(VIEW.width / 2, 74 * scale, '희귀 선택', { fontFamily: FONT, fontSize: `${38 * scale}px`, color: '#ffd36b' }).setOrigin(0.5));
+    c.add(this.add.text(VIEW.width / 2, 112 * scale, '털실 제단이 축복을 내립니다', { fontFamily: FONT, fontSize: `${15 * scale}px`, color: '#f2afd3' }).setOrigin(0.5));
+    const cardW = 220 * scale; const cardH = 210 * scale; const gap = 18 * scale;
+    const start = VIEW.width / 2 - (cardW * 3 + gap * 2) / 2;
+    payload.choices.forEach((choice, i) => {
+      const x = start + i * (cardW + gap); const y = VIEW.height / 2 - cardH / 2 + 20 * scale;
+      const card = this.add.container(x, y);
+      const bg = this.add.graphics().fillStyle(0x21182d, 1).fillRoundedRect(0, 0, cardW, cardH, 12).lineStyle(2, 0xf2afd3, 0.9).strokeRoundedRect(0, 0, cardW, cardH, 12);
+      card.add(bg);
+      const icon = this.add.image(cardW / 2, 65 * scale, 'asset:rare:sheet', choice.frame); const src = icon.texture.getSourceImage(); if (src.width) icon.setScale(48 * scale / src.width); card.add(icon);
+      card.add(this.add.text(cardW / 2, 116 * scale, choice.name, { fontFamily: FONT, fontSize: `${20 * scale}px`, color: '#fff4fa' }).setOrigin(0.5));
+      card.add(this.add.text(cardW / 2, 160 * scale, choice.detail, { fontFamily: FONT, fontSize: `${13 * scale}px`, color: '#d7c4da', align: 'center', wordWrap: { width: cardW - 24 * scale } }).setOrigin(0.5));
+      const zone = this.add.zone(0, 0, cardW, cardH).setOrigin(0).setInteractive({ useHandCursor: true });
+      zone.on('pointerup', () => {
+        if (!this.rareInputReady) return;
+        this.clearOverlay(); bus.emit(EV.rarePicked, choice);
+      }); card.add(zone); c.add(card);
+    });
+  }
+
+  private onMapEvent(name: string) {
+    const text = this.add.text(VIEW.width / 2, 96, `◆ ${name} ◆`, {
+      fontFamily: FONT, fontSize: '22px', color: '#ffd36b', stroke: '#120c18', strokeThickness: 5,
+    }).setOrigin(0.5).setDepth(150).setAlpha(0);
+    this.tweens.add({ targets: text, alpha: 1, y: 112, duration: 260, yoyo: true, hold: 2200, onComplete: () => text.destroy() });
+  }
+
   /* ---------------------------------------------------------------- */
   /* 일시정지                                                           */
   /* ---------------------------------------------------------------- */
@@ -476,6 +519,7 @@ export class UIScene extends Phaser.Scene {
         )
         .setOrigin(0.5),
     );
+    panel.add(this.add.text(VIEW.width / 2, 294, `개인 기록 #${s.recordRank || '-'}   ·   최고 ${fmtTime(s.bestTime ?? s.time)}`, { fontFamily: FONT, fontSize: '14px', color: '#ffd36b' }).setOrigin(0.5));
 
     const restart = () => {
       this.clearOverlay();
@@ -484,12 +528,12 @@ export class UIScene extends Phaser.Scene {
     this.bindOverlayKey('keydown-SPACE', restart);
     this.bindOverlayKey('keydown-ENTER', restart);
     if (s.cleared) {
-      panel.add(this.makeButton(VIEW.width / 2, 330, '  오버타임 계속하기  ', () => {
+      panel.add(this.makeButton(VIEW.width / 2, 350, '  오버타임 계속하기  ', () => {
         this.clearOverlay();
         bus.emit(EV.overtime);
       }, true));
-    } else panel.add(this.makeButton(VIEW.width / 2, 330, '  다시 시작  ', restart, true));
-    panel.add(this.makeButton(VIEW.width / 2, 392, '  성장 상점  ', () => {
+    } else panel.add(this.makeButton(VIEW.width / 2, 350, '  다시 시작  ', restart, true));
+    panel.add(this.makeButton(VIEW.width / 2, 412, '  성장 상점  ', () => {
       this.clearOverlay();
       bus.emit(EV.menu);
     }, false));

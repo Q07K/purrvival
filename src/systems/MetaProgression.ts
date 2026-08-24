@@ -16,6 +16,7 @@ export const META_UPGRADES = [
 
 export type MetaUpgradeId = (typeof META_UPGRADES)[number]['id'];
 type UnlockId = 'dog' | 'rate15' | 'rate2' | 'rate3';
+export type RunRecord = { time: number; kills: number; level: number; cleared: boolean };
 
 const RANK_GOLD = [0, 800, 2400, 5000, 8500, 13000, 19000, 27000, 37000, 50000, 66000, 85000, 108000, 136000, 170000, 210000, 260000, 320000, 390000, 470000];
 const UNLOCKS: Record<UnlockId, { name: string; desc: string; cost: number; level: number }> = {
@@ -25,12 +26,13 @@ const UNLOCKS: Record<UnlockId, { name: string; desc: string; cost: number; leve
   rate3: { name: '3× 배속', desc: '전투 배속 3× 해금', cost: 10000, level: 20 },
 };
 
-type SaveData = { gold: number; totalGold: number; upgrades: Record<MetaUpgradeId, number>; unlocks: Record<UnlockId, boolean> };
+type SaveData = { gold: number; totalGold: number; upgrades: Record<MetaUpgradeId, number>; unlocks: Record<UnlockId, boolean>; records: RunRecord[] };
 const KEY = 'cat-survivors-meta-v1';
 const fresh = (): SaveData => ({
   gold: 0, totalGold: 0,
   upgrades: { hp: 0, speed: 0, damage: 0, magnet: 0, healDrop: 0, healPower: 0, xp: 0, projectile: 0, auraSpeed: 0, orbitSpeed: 0, area: 0 },
   unlocks: { dog: false, rate15: false, rate2: false, rate3: false },
+  records: [],
 });
 
 class MetaProgression {
@@ -82,6 +84,18 @@ class MetaProgression {
     this.data.totalGold += amount;
     this.save();
   }
+
+  record(run: RunRecord) {
+    const records = [...this.data.records, run]
+      .sort((a, b) => b.time - a.time || Number(b.cleared) - Number(a.cleared) || b.kills - a.kills)
+      .slice(0, 5);
+    this.data.records = records;
+    this.save();
+    return records.indexOf(run) + 1 || 0;
+  }
+
+  bestTime() { return this.data.records[0]?.time ?? 0; }
+  records() { return this.data.records; }
 
   apply(p: PlayerState) {
     const lv = (id: MetaUpgradeId) => this.levelOf(id);

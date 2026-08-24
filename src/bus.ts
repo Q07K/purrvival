@@ -12,8 +12,13 @@ export const EV = {
   stats: 'stats',
   /** 레벨업 → 선택지 3장 제시 */
   levelup: 'levelup',
+  /** 15분 털실 제단의 희귀 보상 선택 */
+  rareChoice: 'rareChoice',
+  /** 5분 맵 이벤트 안내 */
+  mapEvent: 'mapEvent',
   /** UI에서 카드 선택 완료 */
   picked: 'picked',
+  rarePicked: 'rarePicked',
   /** ESC 일시정지 */
   pause: 'pause',
   /** UI 버튼의 일시정지 요청 */

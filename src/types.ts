@@ -167,6 +167,13 @@ export interface Choice {
   tex?: string;
 }
 
+export interface RareChoice {
+  id: 'crown' | 'heart' | 'moon' | 'comet';
+  name: string;
+  detail: string;
+  frame: number;
+}
+
 export interface HudStats {
   hp: number;
   maxHp: number;
@@ -184,6 +191,8 @@ export interface GameOverStats {
   level: number;
   gold: number;
   cleared?: boolean;
+  recordRank?: number;
+  bestTime?: number;
 }
 
 /** 일시정지 화면에 보여줄 현재 빌드 */

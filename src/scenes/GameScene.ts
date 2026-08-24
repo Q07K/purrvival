@@ -12,7 +12,7 @@ import { SpatialHash } from '../systems/SpatialHash';
 import { sfx } from '../systems/Sfx';
 import { meta } from '../systems/MetaProgression';
 import { TEX, buildTextures, cycleTheme, getTheme } from '../theme';
-import type { Choice, Enemy, Gem, HudStats, PlayerState, Projectile, WeaponStats } from '../types';
+import type { Choice, Enemy, Gem, HudStats, PlayerState, Projectile, RareChoice, WeaponStats } from '../types';
 
 const DEPTH = { ground: 0, gem: 5, aura: 8, enemy: 10, player: 20, proj: 30 };
 const BACKGROUNDS = ['asset:bg:attic', 'asset:bg:cellar', 'asset:bg:garden', 'asset:bg:rooftop', 'asset:bg:toyroom'];
@@ -39,6 +39,8 @@ export class GameScene extends Phaser.Scene {
   private weaponVisuals = new Map<number, Phaser.GameObjects.Image[]>();
   private collabFx = new Map<number, Phaser.GameObjects.Graphics>();
   private projectileTrails?: Phaser.GameObjects.Graphics;
+  private eventSprite?: Phaser.GameObjects.Image;
+  private eventFx?: Phaser.GameObjects.Graphics;
 
   private elapsed = 0;
   private rate = 1;
@@ -47,6 +49,8 @@ export class GameScene extends Phaser.Scene {
   private spawnCredit = 0;
   private nextGemMergeAt = 0;
   private nextEliteAt = ELITE_INTERVAL;
+  private nextMapEventAt = 5 * 60;
+  private mapEventIndex = 0;
   private finalBossSpawned = false;
   private cleared = false;
   private overtime = false;
@@ -81,6 +85,8 @@ export class GameScene extends Phaser.Scene {
     this.spawnCredit = 0;
     this.nextGemMergeAt = 0;
     this.nextEliteAt = ELITE_INTERVAL;
+    this.nextMapEventAt = 5 * 60;
+    this.mapEventIndex = 0;
     this.finalBossSpawned = false;
     this.cleared = false;
     this.overtime = false;
@@ -156,6 +162,7 @@ export class GameScene extends Phaser.Scene {
     if (!this.scene.isActive('UI')) this.scene.launch('UI');
 
     bus.on(EV.picked, this.onPicked, this);
+    bus.on(EV.rarePicked, this.onRarePicked, this);
     bus.on(EV.restart, this.onRestart, this);
     bus.on(EV.resume, this.onResume, this);
     bus.on(EV.speed, this.onRate, this);
@@ -165,6 +172,7 @@ export class GameScene extends Phaser.Scene {
     bus.on(EV.resize, this.onResize, this);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       bus.off(EV.picked, this.onPicked, this);
+      bus.off(EV.rarePicked, this.onRarePicked, this);
       bus.off(EV.restart, this.onRestart, this);
       bus.off(EV.resume, this.onResume, this);
       bus.off(EV.speed, this.onRate, this);
@@ -275,6 +283,7 @@ export class GameScene extends Phaser.Scene {
 
     this.stepPlayer(dt);
     this.stepSpawning(dt);
+    this.stepMapEvents();
     this.stepEnemies(dt);
 
     // 적이 움직인 뒤에 해시를 다시 세워야 충돌 판정이 정확하다.
@@ -368,6 +377,55 @@ export class GameScene extends Phaser.Scene {
         d.speed,
       );
     }
+  }
+
+  /** 5분마다 전투 리듬을 바꾸는 맵 이벤트. 4번째는 최종 보스와 함께 연출만 추가한다. */
+  private stepMapEvents() {
+    if (this.elapsed < this.nextMapEventAt) return;
+    this.nextMapEventAt += 5 * 60;
+    const kind = this.mapEventIndex++ % 4;
+    const angle = Math.random() * Math.PI * 2;
+    const x = this.player.x + Math.cos(angle) * 190;
+    const y = this.player.y + Math.sin(angle) * 130;
+    this.showMapEvent(kind, x, y);
+    bus.emit(EV.mapEvent, ['치즈 수레 습격', '굴 붕괴', '털실 제단', '달빛 사냥'][kind]);
+    const d = difficultyScale(this.elapsed);
+
+    if (kind === 0) {
+      for (let i = 0; i < 5; i++) this.spawnEnemy(ELITE, x + Math.cos(i * 1.26) * 90, y + Math.sin(i * 1.26) * 90, d.hp, d.speed);
+      for (let i = 0; i < 4; i++) this.spawnGem(x + (Math.random() - 0.5) * 70, y + (Math.random() - 0.5) * 70, 5, true);
+    } else if (kind === 1) {
+      const swarm = ENEMY_KINDS[0];
+      for (let i = 0; i < 24; i++) this.spawnEnemy(swarm, x + Math.cos(i * Math.PI * 2 / 24) * 45, y + Math.sin(i * Math.PI * 2 / 24) * 45, d.hp, d.speed);
+    } else if (kind === 2) {
+      this.awaitingChoice = true;
+      bus.emit(EV.rareChoice, { choices: this.rareChoices() });
+      this.scene.pause();
+    }
+  }
+
+  private showMapEvent(frame: number, x: number, y: number) {
+    this.eventSprite?.destroy();
+    this.eventFx?.destroy();
+    this.eventSprite = this.add.image(x, y, 'asset:event:sheet', frame).setDepth(DEPTH.aura).setScale(0.22);
+    this.eventFx = this.add.graphics().setDepth(DEPTH.aura - 1);
+    const color = [0xffd36b, 0xff5b5b, 0xff9eb4, 0x78b8ff][frame];
+    this.eventFx.lineStyle(3, color, 0.7).strokeCircle(x, y, frame === 1 ? 150 : 110);
+    this.tweens.add({ targets: this.eventSprite, scale: 0.25, duration: 550, yoyo: true, repeat: 3 });
+    this.time.delayedCall(15000, () => {
+      this.eventSprite?.destroy(); this.eventSprite = undefined;
+      this.eventFx?.destroy(); this.eventFx = undefined;
+    });
+  }
+
+  private rareChoices(): RareChoice[] {
+    const choices: RareChoice[] = [
+      { id: 'crown', name: '치즈 왕관', detail: '이번 런 모든 피해 +35%', frame: 0 },
+      { id: 'heart', name: '성스러운 털실', detail: 'HP 전부 회복 · 최대 HP +25%', frame: 1 },
+      { id: 'moon', name: '달빛 발자국', detail: '이동 속도 +20% · 획득 범위 +35%', frame: 2 },
+      { id: 'comet', name: '무지개 실타래', detail: '모든 무기 공격 간격 -25%', frame: 3 },
+    ];
+    return choices.sort(() => Math.random() - 0.5).slice(0, 3);
   }
 
   /** 현재 카메라 사각형의 네 변 바로 밖에서 적을 생성한다. */
@@ -1107,6 +1165,15 @@ export class GameScene extends Phaser.Scene {
     this.scene.resume();
   }
 
+  private onRarePicked(choice: RareChoice) {
+    if (choice.id === 'crown') this.player.damageMult *= 1.35;
+    if (choice.id === 'heart') { this.player.maxHp *= 1.25; this.player.hp = this.player.maxHp; }
+    if (choice.id === 'moon') { this.player.speed *= 1.2; this.player.magnet *= 1.35; }
+    if (choice.id === 'comet') this.player.cooldownMult *= 0.75;
+    this.awaitingChoice = false;
+    this.scene.resume();
+  }
+
   /**
    * ESC 일시정지.
    *
@@ -1157,11 +1224,13 @@ export class GameScene extends Phaser.Scene {
     this.dead = true;
     const gold = Math.max(0, Math.floor(this.kills * 0.05 + this.elapsed * 0.5) - this.earnedGold);
     meta.earn(gold);
+    const recordRank = meta.record({ time: this.elapsed, kills: this.kills, level: this.player.level, cleared: false });
     bus.emit(EV.gameover, {
       time: this.elapsed,
       kills: this.kills,
       level: this.player.level,
       gold,
+      recordRank, bestTime: meta.bestTime(),
     });
     this.scene.pause();
   }
@@ -1172,7 +1241,8 @@ export class GameScene extends Phaser.Scene {
     const gold = Math.floor(this.kills * 0.05 + this.elapsed * 0.5) + 1000;
     this.earnedGold += gold;
     meta.earn(gold);
-    bus.emit(EV.gameover, { time: this.elapsed, kills: this.kills, level: this.player.level, gold, cleared: true });
+    const recordRank = meta.record({ time: this.elapsed, kills: this.kills, level: this.player.level, cleared: true });
+    bus.emit(EV.gameover, { time: this.elapsed, kills: this.kills, level: this.player.level, gold, cleared: true, recordRank, bestTime: meta.bestTime() });
     this.scene.pause();
   }
 
