@@ -132,7 +132,7 @@ export class UIScene extends Phaser.Scene {
     this.timeText.setText(fmtTime(s.time));
 
     this.statText.setText(
-      `Lv ${s.level}   처치 ${s.kills}   적 ${s.enemies}   HP ${Math.max(0, Math.ceil(s.hp))}/${s.maxHp}`,
+      `Lv ${s.level}   처치 ${s.kills}   적 ${s.enemies}   HP ${Math.max(0, Math.ceil(s.hp))}/${Math.round(s.maxHp)}`,
     );
   }
 
@@ -337,7 +337,7 @@ export class UIScene extends Phaser.Scene {
     );
     panel.add(
       this.add
-        .text(VIEW.width / 2, 108, `${fmtTime(s.time)}   ·   Lv ${s.level}   ·   처치 ${s.kills}   ·   HP ${Math.max(0, Math.ceil(s.hp))}/${s.maxHp}`, {
+        .text(VIEW.width / 2, 108, `${fmtTime(s.time)}   ·   Lv ${s.level}   ·   처치 ${s.kills}   ·   HP ${Math.max(0, Math.ceil(s.hp))}/${Math.round(s.maxHp)}`, {
           fontFamily: FONT, fontSize: '15px', color: '#9aa7ba',
         })
         .setOrigin(0.5),
