@@ -39,6 +39,7 @@ export class GameScene extends Phaser.Scene {
   private weaponVisuals = new Map<number, Phaser.GameObjects.Image[]>();
   private collabFx = new Map<number, Phaser.GameObjects.Graphics>();
   private projectileTrails?: Phaser.GameObjects.Graphics;
+  private bossFx?: Phaser.GameObjects.Graphics;
   private eventSprite?: Phaser.GameObjects.Image;
   private eventFx?: Phaser.GameObjects.Graphics;
   private shrine?: { x: number; y: number; expires: number };
@@ -1241,6 +1242,7 @@ export class GameScene extends Phaser.Scene {
       e.sprite.setFlipX(this.player.x > e.x);
       e.sprite.setPosition(e.x, e.y);
     }
+    this.drawBossWarning(es);
     const ps = this.projectiles.items;
     for (let i = 0; i < ps.length; i++) {
       if (ps[i].active) ps[i].sprite.setPosition(ps[i].x, ps[i].y);
@@ -1248,6 +1250,21 @@ export class GameScene extends Phaser.Scene {
     const gs = this.gems.items;
     for (let i = 0; i < gs.length; i++) {
       if (gs[i].active) gs[i].sprite.setPosition(gs[i].x, gs[i].y);
+    }
+  }
+
+  /** 최종 보스의 근접 충격파 반경과 다음 발동까지의 충전량을 표시한다. */
+  private drawBossWarning(enemies: Enemy[]) {
+    const fx = this.bossFx ??= this.add.graphics().setDepth(DEPTH.aura);
+    fx.clear();
+    const now = this.elapsed * 1000;
+    for (const e of enemies) {
+      if (!e.active || !e.boss) continue;
+      const progress = Phaser.Math.Clamp(1 - Math.max(0, e.hitAt[7] - now) / 1600, 0, 1);
+      fx.fillStyle(0x70bfff, 0.045).fillCircle(e.x, e.y, 260);
+      fx.lineStyle(3, 0x83ceff, 0.86).strokeCircle(e.x, e.y, 260);
+      fx.lineStyle(7, 0xff5f78, 0.96).beginPath()
+        .arc(e.x, e.y, 248, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress, false).strokePath();
     }
   }
 
