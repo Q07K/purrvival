@@ -89,13 +89,10 @@ export class MetaShopScene extends Phaser.Scene {
     const next = meta.nextPrestigeXp();
     const done = meta.challenges().filter((challenge) => challenge.complete);
     this.add.text(VIEW.width / 2, 138, `달빛 명성 Lv ${meta.prestigeLevel} · 전승 인장 ${meta.moonSeals}개 · 도전 ${done.length}/5${next > meta.prestigeXp ? ` · 다음 ${next}` : ''}`, { fontFamily: FONT, fontSize: compact ? '13px' : '15px', color: '#d8c5ff' }).setOrigin(0.5);
-    const offeringCost = meta.legacyOfferingCost();
-    const canOffer = meta.gold >= offeringCost;
     this.add.graphics().fillStyle(0x201a31, 1).fillRoundedRect(x, 156, width, 46, 9).lineStyle(1, 0x6f55a5, 1).strokeRoundedRect(x, 156, width, 46, 9);
-    this.add.text(x + 12, 166, '달빛 공물', { fontFamily: FONT, fontSize: compact ? '14px' : '17px', color: '#f0e7ff' });
-    this.add.text(x + 12, 184, '골드로 명성 +120 · 명성 레벨업 시 전승 인장 획득', { fontFamily: FONT, fontSize: compact ? '10px' : '12px', color: '#c0b4d7' });
-    const offer = this.add.text(x + width - 12, 179, `${offeringCost.toLocaleString()} G`, { fontFamily: FONT, fontSize: compact ? '11px' : '14px', color: canOffer ? '#190d28' : '#8e9aae', backgroundColor: canOffer ? '#c6a4ff' : '#232b3a', padding: { x: compact ? 6 : 9, y: compact ? 5 : 7 } }).setOrigin(1, 0.5);
-    if (canOffer) offer.setInteractive({ useHandCursor: true }).on('pointerup', () => { meta.buyLegacyOffering(); this.draw(); });
+    this.add.text(x + 12, 166, '전승 인장', { fontFamily: FONT, fontSize: compact ? '14px' : '17px', color: '#f0e7ff' });
+    this.add.text(x + 12, 184, '명성 레벨업과 도전 과제 보상으로 획득합니다.', { fontFamily: FONT, fontSize: compact ? '10px' : '12px', color: '#c0b4d7' });
+    this.add.text(x + width - 12, 179, '공물 판매 중단', { fontFamily: FONT, fontSize: compact ? '11px' : '14px', color: '#c8bbdc', backgroundColor: '#302643', padding: { x: compact ? 6 : 9, y: compact ? 5 : 7 } }).setOrigin(1, 0.5);
     const h = compact ? 66 : 82;
     LEGACY_TRAITS.forEach((trait, i) => {
       const y = 214 + i * (h + 6);

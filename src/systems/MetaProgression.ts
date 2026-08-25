@@ -51,7 +51,7 @@ const UNLOCKS: Record<UnlockId, { name: string; desc: string; cost: number; leve
 
 type SaveData = {
   gold: number; totalGold: number; upgrades: Record<MetaUpgradeId, number>; unlocks: Record<UnlockId, boolean>; records: RunRecord[];
-  prestigeXp: number; moonSeals: number; mastery: Record<CharacterId, number>; traits: Record<LegacyTraitId, boolean>; challenges: Record<ChallengeId, boolean>;
+  prestigeXp: number; moonSeals: number; mastery: Record<CharacterId, number>; traits: Record<LegacyTraitId, boolean>; challenges: Record<ChallengeId, boolean>; offeringRefunded: boolean;
 };
 const KEY = 'cat-survivors-meta-v1';
 const fresh = (): SaveData => ({
@@ -63,6 +63,7 @@ const fresh = (): SaveData => ({
   mastery: { cat: 0, dog: 0 },
   traits: { catClaw: false, catMagnet: false, dogPulse: false, dogSpark: false },
   challenges: { survive10: false, slay5000: false, clearRun: false, mutate3: false, level50: false },
+  offeringRefunded: false,
 });
 
 class MetaProgression {
@@ -76,6 +77,11 @@ class MetaProgression {
         mastery: { ...fresh().mastery, ...saved.mastery }, traits: { ...fresh().traits, ...saved.traits }, challenges: { ...fresh().challenges, ...saved.challenges },
       } : fresh();
       data.records = (data.records ?? []).map((run: RunRecord) => ({ ...run, mutations: run.mutations ?? 0, score: run.score ?? Math.floor(run.kills + run.time * 10) }));
+      if (saved && saved.offeringRefunded === undefined && Object.values(data.traits).every(Boolean)) {
+        data.gold += Math.floor(data.prestigeXp / 120) * 50000;
+        data.offeringRefunded = true;
+        localStorage.setItem(KEY, JSON.stringify(data));
+      }
       return data;
     } catch { return fresh(); }
   }
@@ -90,7 +96,6 @@ class MetaProgression {
   get moonSeals() { return this.data.moonSeals; }
   nextLevelGold() { return RANK_GOLD[this.level] ?? RANK_GOLD[RANK_GOLD.length - 1]; }
   nextPrestigeXp() { return PRESTIGE_XP[this.prestigeLevel] ?? PRESTIGE_XP[PRESTIGE_XP.length - 1]; }
-  legacyOfferingCost() { return 50000 * Math.min(20, Math.max(1, this.prestigeLevel)); }
   levelOf(id: MetaUpgradeId) { return this.data.upgrades[id]; }
   isUnlocked(id: UnlockId) { return this.data.unlocks[id]; }
   unlockInfo(id: UnlockId) { return UNLOCKS[id]; }
@@ -130,17 +135,6 @@ class MetaProgression {
     this.data.moonSeals--;
     this.data.gold -= trait.gold;
     this.data.traits[id] = true;
-    this.save();
-    return true;
-  }
-
-  buyLegacyOffering() {
-    const cost = this.legacyOfferingCost();
-    if (!this.legacyUnlocked || this.data.gold < cost) return false;
-    const before = this.prestigeLevel;
-    this.data.gold -= cost;
-    this.data.prestigeXp += 120;
-    this.data.moonSeals += Math.max(0, this.prestigeLevel - before);
     this.save();
     return true;
   }
