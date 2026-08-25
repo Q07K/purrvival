@@ -87,6 +87,9 @@ export class GameScene extends Phaser.Scene {
   private playerMoving = false;
   private touchOrigin?: Phaser.Math.Vector2;
   private touchDirection = new Phaser.Math.Vector2();
+  private prepShield = 0;
+  private prepHealMult = 1;
+  private prepHealDropBonus = 0;
 
   private hud: HudStats = {
     hp: 0, maxHp: 0, level: 1, xp: 0, xpNext: 0, time: 0, kills: 0, enemies: 0,
@@ -137,6 +140,9 @@ export class GameScene extends Phaser.Scene {
     this.pendingLevels = 0;
     this.awaitingChoice = false;
     this.dead = false;
+    this.prepShield = meta.prepLevel('moonShield');
+    this.prepHealMult = 1 + meta.prepLevel('cheeseMeal') * 0.1;
+    this.prepHealDropBonus = meta.prepLevel('luckyBell') * 0.003;
 
     const theme = getTheme();
     buildTextures(this, theme);
@@ -185,7 +191,10 @@ export class GameScene extends Phaser.Scene {
 
     this.weaponVisuals.clear();
     this.prog.reset();
+    const starter = this.prog.weapons[0];
+    if (starter) starter.level = Math.min(starter.def.maxLevel, starter.level + meta.prepLevel('yarnKit'));
     this.prog.applyPassives(this.player);
+    this.applyPrepBonuses(true);
 
     const kb = this.input.keyboard!;
     this.keys = kb.addKeys('W,A,S,D,UP,LEFT,DOWN,RIGHT') as Record<
@@ -675,9 +684,7 @@ export class GameScene extends Phaser.Scene {
 
       if (e.boss && dist <= 260 && this.elapsed * 1000 >= e.hitAt[7]) {
         e.hitAt[7] = this.elapsed * 1000 + 1600;
-        p.hp -= Math.max(1, e.damage * 0.6 - p.armor);
-        this.cameras.main.shake(150, 0.008);
-        sfx.play('hurt');
+        this.hitPlayer(Math.max(1, e.damage * 0.6 - p.armor), 0, 150, 0.008);
       }
 
       if (e.flash > 0) {
@@ -712,12 +719,7 @@ export class GameScene extends Phaser.Scene {
       const dx = p.x - shot.x;
       const dy = p.y - shot.y;
       if (dx * dx + dy * dy > 22 * 22) continue;
-      if (p.invuln <= 0) {
-        p.hp -= Math.max(1, shot.damage - p.armor);
-        p.invuln = 0.25;
-        this.cameras.main.shake(90, 0.004);
-        sfx.play('hurt');
-      }
+      if (p.invuln <= 0) this.hitPlayer(Math.max(1, shot.damage - p.armor), 0.25, 90, 0.004);
       this.enemyShots.release(shot);
     }
   }
@@ -1109,7 +1111,7 @@ export class GameScene extends Phaser.Scene {
     if (e.hp <= 0) {
       sfx.play('kill');
       this.spawnGem(e.x, e.y, e.xp * (e.gemTier ? 5 : 1), e.elite);
-      if (this.player.hp < this.player.maxHp && Math.random() < meta.healDropChance()) {
+      if (this.player.hp < this.player.maxHp && Math.random() < meta.healDropChance() + this.prepHealDropBonus) {
         this.spawnGem(e.x, e.y, 0, false, true);
       }
       this.kills++;
@@ -1264,7 +1266,7 @@ export class GameScene extends Phaser.Scene {
       // 수집 반경 16px 을 그냥 건너뛰어 버린다(터널링).
       if (d <= pick || step >= d) {
         sfx.play('pickup');
-        if (g.heal) p.hp = Math.min(p.maxHp, p.hp + meta.healAmount());
+        if (g.heal) p.hp = Math.min(p.maxHp, p.hp + Math.round(meta.healAmount() * this.prepHealMult));
         else this.gainXp(g.xp);
         this.gems.release(g);
       }
@@ -1303,12 +1305,23 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (worst > 0) {
-      sfx.play('hurt');
       const pressure = Math.min(4, 1 + (contacts - 1) * 0.2);
-      p.hp -= Math.max(1, worst * pressure - p.armor);
-      p.invuln = PLAYER.invulnTime;
-      this.cameras.main.shake(120, 0.006);
+      this.hitPlayer(Math.max(1, worst * pressure - p.armor), PLAYER.invulnTime, 120, 0.006);
     }
+  }
+
+  private hitPlayer(amount: number, invuln: number, shake: number, intensity: number) {
+    if (this.prepShield > 0) {
+      this.prepShield--;
+      this.player.invuln = Math.max(this.player.invuln, 0.5);
+      this.cameras.main.shake(shake, intensity * 0.5);
+      sfx.play('pickup');
+      return;
+    }
+    this.player.hp -= amount;
+    this.player.invuln = Math.max(this.player.invuln, invuln);
+    this.cameras.main.shake(shake, intensity);
+    sfx.play('hurt');
   }
 
   /* ---------------------------------------------------------------- */
@@ -1421,6 +1434,7 @@ export class GameScene extends Phaser.Scene {
     if (choice.kind === 'collab') this.clearWeaponVisuals();
     sfx.play('pickup');
     this.prog.apply(choice, this.player);
+    this.applyPrepBonuses();
     this.applyRareBonuses();
     this.pendingLevels--;
     this.awaitingChoice = false;
@@ -1434,6 +1448,7 @@ export class GameScene extends Phaser.Scene {
     if (choice.id === 'moon') { this.rareSpeedMult *= 1 + 0.2 * power; this.rareMagnetMult *= 1 + 0.35 * power; }
     if (choice.id === 'comet') this.rareCooldownMult *= 1 - 0.25 * power;
     this.prog.applyPassives(this.player);
+    this.applyPrepBonuses();
     this.applyRareBonuses(choice.id === 'heart');
     this.awaitingChoice = false;
     this.scene.resume();
@@ -1448,6 +1463,12 @@ export class GameScene extends Phaser.Scene {
     p.speed *= this.rareSpeedMult;
     p.magnet *= this.rareMagnetMult;
     p.cooldownMult *= this.rareCooldownMult;
+  }
+
+  private applyPrepBonuses(fullHeal = false) {
+    const before = this.player.maxHp;
+    this.player.maxHp *= this.prepHealMult;
+    this.player.hp = fullHeal ? this.player.maxHp : Math.min(this.player.maxHp, this.player.hp + Math.max(0, this.player.maxHp - before));
   }
 
   private onMutationPicked(choice: MutationChoice) {

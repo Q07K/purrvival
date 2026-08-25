@@ -22,6 +22,7 @@ type UnlockId = 'dog' | 'rate15' | 'rate2' | 'rate3';
 type CharacterId = 'cat' | 'dog';
 export type RunRecord = { time: number; kills: number; level: number; cleared: boolean; score: number; mutations: number; character?: CharacterId };
 export type LegacyTraitId = 'catClaw' | 'catMagnet' | 'dogPulse' | 'dogSpark';
+export type ExpeditionPrepId = 'yarnKit' | 'moonShield' | 'cheeseMeal' | 'luckyBell';
 type ChallengeId = 'survive10' | 'slay5000' | 'clearRun' | 'mutate3' | 'level50';
 
 export const LEGACY_TRAITS: { id: LegacyTraitId; character: CharacterId; name: string; desc: string; mastery: number; gold: number; frame: number }[] = [
@@ -29,6 +30,13 @@ export const LEGACY_TRAITS: { id: LegacyTraitId; character: CharacterId; name: s
   { id: 'catMagnet', character: 'cat', name: '별빛 수염', desc: '고양이 획득 범위 +30%', mastery: 3, gold: 30000, frame: 1 },
   { id: 'dogPulse', character: 'dog', name: '공명 목걸이', desc: '강아지 펄스 주기 -18%', mastery: 2, gold: 20000, frame: 2 },
   { id: 'dogSpark', character: 'dog', name: '번개 발바닥', desc: '강아지 무기 범위 +15%', mastery: 3, gold: 30000, frame: 3 },
+];
+
+export const EXPEDITION_PREPS: { id: ExpeditionPrepId; name: string; desc: string; cost: number }[] = [
+  { id: 'yarnKit', name: '실 보급 상자', desc: '시작 무기 레벨 +1', cost: 25000 },
+  { id: 'moonShield', name: '달빛 보호막', desc: '런 시작 보호막 +1회', cost: 30000 },
+  { id: 'cheeseMeal', name: '치즈 간식', desc: '최대 HP·회복량 +10%', cost: 22000 },
+  { id: 'luckyBell', name: '행운의 방울', desc: '회복 아이템 드랍 확률 +0.3%', cost: 20000 },
 ];
 
 const CHALLENGES: { id: ChallengeId; name: string; desc: string; done: (run: RunRecord) => boolean }[] = [
@@ -51,7 +59,7 @@ const UNLOCKS: Record<UnlockId, { name: string; desc: string; cost: number; leve
 
 type SaveData = {
   gold: number; totalGold: number; upgrades: Record<MetaUpgradeId, number>; unlocks: Record<UnlockId, boolean>; records: RunRecord[];
-  prestigeXp: number; moonSeals: number; mastery: Record<CharacterId, number>; traits: Record<LegacyTraitId, boolean>; challenges: Record<ChallengeId, boolean>; offeringRefunded: boolean;
+  prestigeXp: number; moonSeals: number; mastery: Record<CharacterId, number>; traits: Record<LegacyTraitId, boolean>; challenges: Record<ChallengeId, boolean>; offeringRefunded: boolean; prep: Record<ExpeditionPrepId, number>;
 };
 const KEY = 'cat-survivors-meta-v1';
 const fresh = (): SaveData => ({
@@ -64,6 +72,7 @@ const fresh = (): SaveData => ({
   traits: { catClaw: false, catMagnet: false, dogPulse: false, dogSpark: false },
   challenges: { survive10: false, slay5000: false, clearRun: false, mutate3: false, level50: false },
   offeringRefunded: false,
+  prep: { yarnKit: 0, moonShield: 0, cheeseMeal: 0, luckyBell: 0 },
 });
 
 class MetaProgression {
@@ -75,6 +84,7 @@ class MetaProgression {
       const data = saved ? {
         ...fresh(), ...saved, upgrades: { ...fresh().upgrades, ...saved.upgrades }, unlocks: { ...fresh().unlocks, ...saved.unlocks },
         mastery: { ...fresh().mastery, ...saved.mastery }, traits: { ...fresh().traits, ...saved.traits }, challenges: { ...fresh().challenges, ...saved.challenges },
+        prep: { ...fresh().prep, ...(typeof saved.prep === 'object' ? saved.prep : {}) },
       } : fresh();
       data.records = (data.records ?? []).map((run: RunRecord) => ({ ...run, mutations: run.mutations ?? 0, score: run.score ?? Math.floor(run.kills + run.time * 10) }));
       if (saved && saved.offeringRefunded === undefined && Object.values(data.traits).every(Boolean)) {
@@ -103,6 +113,11 @@ class MetaProgression {
   masteryXp(id: CharacterId) { return this.data.mastery[id]; }
   masteryLevel(id: CharacterId) { return MASTERY_XP.filter((need) => this.data.mastery[id] >= need).length; }
   traitOwned(id: LegacyTraitId) { return this.data.traits[id]; }
+  prepLevel(id: ExpeditionPrepId) { return this.data.prep[id]; }
+  prepCost(id: ExpeditionPrepId) {
+    const prep = EXPEDITION_PREPS.find((entry) => entry.id === id)!;
+    return prep.cost * (this.prepLevel(id) + 1);
+  }
   challenges() { return CHALLENGES.map((c) => ({ ...c, complete: this.data.challenges[c.id] })); }
 
   upgradeCost(id: MetaUpgradeId) {
@@ -135,6 +150,15 @@ class MetaProgression {
     this.data.moonSeals--;
     this.data.gold -= trait.gold;
     this.data.traits[id] = true;
+    this.save();
+    return true;
+  }
+
+  buyPrep(id: ExpeditionPrepId) {
+    const cost = this.prepCost(id);
+    if (this.prepLevel(id) >= 5 || this.data.gold < cost) return false;
+    this.data.gold -= cost;
+    this.data.prep[id]++;
     this.save();
     return true;
   }

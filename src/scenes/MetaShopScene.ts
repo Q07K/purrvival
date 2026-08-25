@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 import { VIEW } from '../config';
-import { LEGACY_TRAITS, META_UPGRADES, meta } from '../systems/MetaProgression';
+import { EXPEDITION_PREPS, LEGACY_TRAITS, META_UPGRADES, meta } from '../systems/MetaProgression';
 
 const FONT = '"Pretendard", "Malgun Gothic", system-ui, sans-serif';
-type Page = 'basic' | 'survival' | 'combat' | 'unlock' | 'legacy';
+type Page = 'basic' | 'survival' | 'combat' | 'unlock' | 'prep' | 'legacy';
 
 export class MetaShopScene extends Phaser.Scene {
   private page: Page = 'basic';
@@ -26,10 +26,11 @@ export class MetaShopScene extends Phaser.Scene {
     }).setOrigin(0.5, 0);
     this.add.text(VIEW.width - 12, 20, `보유 ${meta.gold} G`, { fontFamily: FONT, fontSize: compact ? '14px' : '18px', color: '#ffd36b' }).setOrigin(1, 0);
 
-    const tabs: [Page, string][] = [['basic', '기본 강화'], ['survival', '생존 강화'], ['combat', '전투 강화'], ['unlock', '해금'], ['legacy', '전승']];
+    const tabs: [Page, string][] = [['basic', '기본 강화'], ['survival', '생존 강화'], ['combat', '전투 강화'], ['unlock', '해금'], ['prep', '원정 준비'], ['legacy', '전승']];
     const tabW = Math.min(120, (VIEW.width - 24) / tabs.length);
     tabs.forEach(([id, label], i) => this.button(12 + tabW * (i + 0.5), 100, label, () => { this.page = id; this.draw(); }, this.page === id, compact ? 12 : 15));
     if (this.page === 'unlock') this.drawUnlocks();
+    else if (this.page === 'prep') this.drawPrep();
     else if (this.page === 'legacy') this.drawLegacy();
     else this.drawUpgrades(this.page === 'basic' ? META_UPGRADES.slice(0, 3) : this.page === 'survival' ? META_UPGRADES.slice(3, 6) : META_UPGRADES.slice(6));
     this.button(VIEW.width / 2, VIEW.height - 30, '캐릭터 선택으로', () => this.scene.start('CharacterSelect'), false, compact ? 13 : 15);
@@ -74,6 +75,26 @@ export class MetaShopScene extends Phaser.Scene {
       const label = owned ? '해금 완료' : meta.level < item.level ? `메인 Lv ${item.level} 필요` : `${item.cost} G 구매`;
       const buy = this.add.text(x + width - 18, y + h / 2, label, { fontFamily: FONT, fontSize: '15px', color: available && !owned ? '#0b1520' : '#8e9aae', backgroundColor: available && !owned ? '#8dceff' : '#232b3a', padding: { x: 10, y: 8 } }).setOrigin(1, 0.5);
       if (available && !owned) buy.setInteractive({ useHandCursor: true }).on('pointerup', () => { meta.buyUnlock(id); this.draw(); });
+    });
+  }
+
+  private drawPrep() {
+    const width = Math.min(620, VIEW.width - 32);
+    const x = (VIEW.width - width) / 2;
+    const compact = VIEW.height < 680;
+    this.add.text(VIEW.width / 2, 138, '골드로 올리는 영구 원정 준비 · 매 런 자동 적용', { fontFamily: FONT, fontSize: compact ? '13px' : '16px', color: '#ffd36b' }).setOrigin(0.5);
+    const h = Math.min(94, Math.max(68, (VIEW.height - 220) / 4));
+    EXPEDITION_PREPS.forEach((prep, i) => {
+      const y = 158 + i * (h + 9);
+      const level = meta.prepLevel(prep.id);
+      const cost = meta.prepCost(prep.id);
+      const canBuy = level < 5 && meta.gold >= cost;
+      this.add.graphics().fillStyle(level >= 5 ? 0x1a2430 : 0x121824, 1).fillRoundedRect(x, y, width, h, 10).lineStyle(2, level >= 5 ? 0x4fbf83 : 0x2b3547, 1).strokeRoundedRect(x, y, width, h, 10);
+      this.add.text(x + 16, y + (compact ? 12 : 16), prep.name, { fontFamily: FONT, fontSize: compact ? '16px' : '20px', color: '#ffffff' });
+      this.add.text(x + 16, y + (compact ? 38 : 48), `${prep.desc} · Lv ${level}/5`, { fontFamily: FONT, fontSize: compact ? '11px' : '14px', color: '#aeb9ca' });
+      const label = level >= 5 ? '최대 강화' : `${cost.toLocaleString()} G`;
+      const buy = this.add.text(x + width - 14, y + h / 2, label, { fontFamily: FONT, fontSize: compact ? '11px' : '15px', color: canBuy ? '#0b1520' : '#8e9aae', backgroundColor: canBuy ? '#8dceff' : '#232b3a', padding: { x: compact ? 6 : 10, y: compact ? 5 : 8 } }).setOrigin(1, 0.5);
+      if (canBuy) buy.setInteractive({ useHandCursor: true }).on('pointerup', () => { meta.buyPrep(prep.id); this.draw(); });
     });
   }
 
