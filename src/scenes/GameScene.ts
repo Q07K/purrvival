@@ -598,7 +598,7 @@ export class GameScene extends Phaser.Scene {
     e.hitAt.fill(0);
 
     e.sprite.setTexture(boss ? 'asset:boss:sheet' : kind.id === 'burrow' || kind.id === 'charger' ? 'asset:burrow:sheet' : kind.id === 'slinger' ? 'asset:slinger:sheet' : TEX.enemy(kind.id));
-    if (boss) e.sprite.setScale(150 / 543);
+    if (boss) e.sprite.setScale(150 / 627);
     else if (kind.id === 'burrow' || kind.id === 'charger') e.sprite.setScale(80 / 768);
     else if (kind.id === 'slinger') e.sprite.setScale(52 / 543);
     else this.scaleTo(e.sprite, this.enemyDisplaySize(kind.id, e.radius));
@@ -1584,7 +1584,7 @@ export class GameScene extends Phaser.Scene {
 
     for (const e of this.enemies.items) {
       e.sprite.setTexture(e.boss ? 'asset:boss:sheet' : e.kind === 'burrow' || e.kind === 'charger' ? 'asset:burrow:sheet' : e.kind === 'slinger' ? 'asset:slinger:sheet' : TEX.enemy(e.kind));
-      if (e.boss) e.sprite.setScale(150 / 543);
+      if (e.boss) e.sprite.setScale(150 / 627);
       else if (e.kind === 'burrow' || e.kind === 'charger') e.sprite.setScale(80 / 768);
       else if (e.kind === 'slinger') e.sprite.setScale(52 / 543);
       else this.scaleTo(e.sprite, this.enemyDisplaySize(e.kind, e.radius));
