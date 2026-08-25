@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { CHARACTERS, selectCharacter } from '../data/characters';
 import { VIEW } from '../config';
-import { meta } from '../systems/MetaProgression';
+import { LEGACY_TRAITS, meta } from '../systems/MetaProgression';
 
 const FONT = '"Pretendard", "Malgun Gothic", system-ui, sans-serif';
 
@@ -72,7 +72,9 @@ export class CharacterSelectScene extends Phaser.Scene {
     this.add.text(x, y + 215 * scale, `시작 무기 · ${character.weaponName}`, {
       fontFamily: FONT, fontSize: `${15 * scale}px`, color: '#ffb5c7',
     }).setOrigin(0.5);
-    this.add.text(x, y + 242 * scale, locked ? '메인 Lv 5 · 2,500 골드' : '선택해서 시작', {
+    const mastery = meta.masteryLevel(character.id);
+    const traits = LEGACY_TRAITS.filter((trait) => trait.character === character.id && meta.traitOwned(trait.id)).length;
+    this.add.text(x, y + 242 * scale, locked ? '메인 Lv 5 · 2,500 골드' : `숙련 Lv ${mastery} · 전승 특성 ${traits}/2`, {
       fontFamily: FONT, fontSize: `${13 * scale}px`, color: '#91a0b5',
     }).setOrigin(0.5);
 

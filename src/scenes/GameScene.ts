@@ -11,6 +11,7 @@ import { Progression } from '../systems/Progression';
 import { SpatialHash } from '../systems/SpatialHash';
 import { sfx } from '../systems/Sfx';
 import { meta } from '../systems/MetaProgression';
+import { selectedCharacter } from '../data/characters';
 import { TEX, buildTextures, cycleTheme, getTheme } from '../theme';
 import type { Choice, Enemy, EnemyShot, Gem, HudStats, MutationChoice, PlayerState, Projectile, RareChoice, WeaponStats } from '../types';
 
@@ -1524,14 +1525,15 @@ export class GameScene extends Phaser.Scene {
     const score = this.runScore();
     const gold = Math.max(0, Math.floor((this.kills * 0.05 + this.elapsed * 0.5) * this.goldMult) - this.earnedGold);
     meta.earn(gold);
-    const recordRank = meta.record({ time: this.elapsed, kills: this.kills, level: this.player.level, cleared: false, score, mutations: this.mutationCount });
+    const rewards = this.finishMeta(false, score);
     bus.emit(EV.gameover, {
       time: this.elapsed,
       kills: this.kills,
       level: this.player.level,
       gold,
       aborted,
-      recordRank, bestTime: meta.bestTime(), score, mutations: this.mutationCount,
+      recordRank: rewards.recordRank, bestTime: meta.bestTime(), score, mutations: rewards.mutations,
+      masteryGain: rewards.masteryGain, masteryLevel: rewards.masteryLevel, prestigeXp: rewards.prestigeXp, moonSeals: rewards.seals, challenges: rewards.challenges,
     });
     this.scene.pause();
   }
@@ -1544,12 +1546,19 @@ export class GameScene extends Phaser.Scene {
     const gold = Math.floor((this.kills * 0.05 + this.elapsed * 0.5 + 1000) * this.goldMult);
     this.earnedGold += gold;
     meta.earn(gold);
-    const recordRank = meta.record({ time: this.elapsed, kills: this.kills, level: this.player.level, cleared: true, score, mutations: this.mutationCount });
-    bus.emit(EV.gameover, { time: this.elapsed, kills: this.kills, level: this.player.level, gold, cleared: true, recordRank, bestTime: meta.bestTime(), score, mutations: this.mutationCount });
+    const rewards = this.finishMeta(true, score);
+    bus.emit(EV.gameover, { time: this.elapsed, kills: this.kills, level: this.player.level, gold, cleared: true, recordRank: rewards.recordRank, bestTime: meta.bestTime(), score, mutations: rewards.mutations, masteryGain: rewards.masteryGain, masteryLevel: rewards.masteryLevel, prestigeXp: rewards.prestigeXp, moonSeals: rewards.seals, challenges: rewards.challenges });
     this.scene.pause();
   }
 
-  private runScore() { return Math.floor((this.kills + this.elapsed * 10) * (1 + this.mutationCount * 0.25)); }
+  private runScore() { return Math.floor((this.kills + this.elapsed * 10) * (1 + (this.mutationCount + this.abyssContracts) * 0.25)); }
+
+  private finishMeta(cleared: boolean, score: number) {
+    const mutations = this.mutationCount + this.abyssContracts;
+    const run = { time: this.elapsed, kills: this.kills, level: this.player.level, cleared, score, mutations, character: selectedCharacter.id };
+    const legacy = meta.completeRun(selectedCharacter.id, run);
+    return { ...legacy, mutations, recordRank: meta.record(run) };
+  }
 
   private onRestart() {
     this.scene.resume();

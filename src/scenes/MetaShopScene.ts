@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 import { VIEW } from '../config';
-import { META_UPGRADES, meta } from '../systems/MetaProgression';
+import { LEGACY_TRAITS, META_UPGRADES, meta } from '../systems/MetaProgression';
 
 const FONT = '"Pretendard", "Malgun Gothic", system-ui, sans-serif';
-type Page = 'basic' | 'survival' | 'combat' | 'unlock';
+type Page = 'basic' | 'survival' | 'combat' | 'unlock' | 'legacy';
 
 export class MetaShopScene extends Phaser.Scene {
   private page: Page = 'basic';
@@ -26,10 +26,11 @@ export class MetaShopScene extends Phaser.Scene {
     }).setOrigin(0.5, 0);
     this.add.text(VIEW.width - 12, 20, `보유 ${meta.gold} G`, { fontFamily: FONT, fontSize: compact ? '14px' : '18px', color: '#ffd36b' }).setOrigin(1, 0);
 
-    const tabs: [Page, string][] = [['basic', '기본 강화'], ['survival', '생존 강화'], ['combat', '전투 강화'], ['unlock', '해금']];
+    const tabs: [Page, string][] = [['basic', '기본 강화'], ['survival', '생존 강화'], ['combat', '전투 강화'], ['unlock', '해금'], ['legacy', '전승']];
     const tabW = Math.min(120, (VIEW.width - 24) / tabs.length);
     tabs.forEach(([id, label], i) => this.button(12 + tabW * (i + 0.5), 100, label, () => { this.page = id; this.draw(); }, this.page === id, compact ? 12 : 15));
     if (this.page === 'unlock') this.drawUnlocks();
+    else if (this.page === 'legacy') this.drawLegacy();
     else this.drawUpgrades(this.page === 'basic' ? META_UPGRADES.slice(0, 3) : this.page === 'survival' ? META_UPGRADES.slice(3, 6) : META_UPGRADES.slice(6));
     this.button(VIEW.width / 2, VIEW.height - 30, '캐릭터 선택으로', () => this.scene.start('CharacterSelect'), false, compact ? 13 : 15);
   }
@@ -74,6 +75,36 @@ export class MetaShopScene extends Phaser.Scene {
       const buy = this.add.text(x + width - 18, y + h / 2, label, { fontFamily: FONT, fontSize: '15px', color: available && !owned ? '#0b1520' : '#8e9aae', backgroundColor: available && !owned ? '#8dceff' : '#232b3a', padding: { x: 10, y: 8 } }).setOrigin(1, 0.5);
       if (available && !owned) buy.setInteractive({ useHandCursor: true }).on('pointerup', () => { meta.buyUnlock(id); this.draw(); });
     });
+  }
+
+  private drawLegacy() {
+    const compact = VIEW.height < 680;
+    const width = Math.min(620, VIEW.width - 32);
+    const x = (VIEW.width - width) / 2;
+    if (!meta.legacyUnlocked) {
+      this.add.text(VIEW.width / 2, 210, '메인 Lv 20에서 달빛 전승이 열립니다', { fontFamily: FONT, fontSize: compact ? '18px' : '24px', color: '#d8c5ff' }).setOrigin(0.5);
+      this.add.text(VIEW.width / 2, 250, '완주·처치·생존으로 골드를 모아 메인 레벨을 올리세요.', { fontFamily: FONT, fontSize: '14px', color: '#8f9bb0' }).setOrigin(0.5);
+      return;
+    }
+    const next = meta.nextPrestigeXp();
+    this.add.text(VIEW.width / 2, 138, `달빛 명성 Lv ${meta.prestigeLevel} · 전승 인장 ${meta.moonSeals}개${next > meta.prestigeXp ? ` · 다음 ${next}` : ''}`, { fontFamily: FONT, fontSize: compact ? '13px' : '15px', color: '#d8c5ff' }).setOrigin(0.5);
+    const h = compact ? 76 : 92;
+    LEGACY_TRAITS.forEach((trait, i) => {
+      const y = 164 + i * (h + 8);
+      const owned = meta.traitOwned(trait.id);
+      const mastery = meta.masteryLevel(trait.character);
+      const available = !owned && mastery >= trait.mastery && meta.moonSeals > 0;
+      this.add.graphics().fillStyle(owned ? 0x1c2736 : 0x121824, 1).fillRoundedRect(x, y, width, h, 10).lineStyle(2, owned ? 0x8a6cff : 0x2b3547, 1).strokeRoundedRect(x, y, width, h, 10);
+      const icon = this.add.image(x + 42, y + h / 2, 'asset:legacy:sheet', trait.frame); icon.setDisplaySize(compact ? 46 : 58, compact ? 46 : 58);
+      this.add.text(x + 80, y + (compact ? 14 : 18), `${trait.name} · ${trait.character === 'cat' ? '고양이' : '강아지'}`, { fontFamily: FONT, fontSize: compact ? '15px' : '18px', color: '#ffffff' });
+      this.add.text(x + 80, y + (compact ? 40 : 50), `${trait.desc} · 숙련 Lv ${trait.mastery} 필요`, { fontFamily: FONT, fontSize: compact ? '11px' : '13px', color: '#aeb9ca' });
+      const label = owned ? '보유' : mastery < trait.mastery ? `숙련 Lv ${trait.mastery}` : meta.moonSeals < 1 ? '인장 부족' : '인장 1개';
+      const buy = this.add.text(x + width - 14, y + h / 2, label, { fontFamily: FONT, fontSize: compact ? '11px' : '14px', color: available ? '#120c20' : '#8e9aae', backgroundColor: available ? '#c6a4ff' : '#232b3a', padding: { x: compact ? 6 : 9, y: compact ? 5 : 7 } }).setOrigin(1, 0.5);
+      if (available) buy.setInteractive({ useHandCursor: true }).on('pointerup', () => { meta.buyTrait(trait.id); this.draw(); });
+    });
+    const done = meta.challenges().filter((challenge) => challenge.complete);
+    const challengeText = meta.challenges().map((challenge) => `${challenge.complete ? '✓' : '○'} ${challenge.name}`).join('   ');
+    this.add.text(VIEW.width / 2, compact ? VIEW.height - 70 : 570, `도전 과제 ${done.length}/5 · ${challengeText}`, { fontFamily: FONT, fontSize: compact ? '11px' : '13px', color: '#ffd36b', align: 'center', wordWrap: { width: VIEW.width - 30 } }).setOrigin(0.5);
   }
 
   private button(x: number, y: number, label: string, action: () => void, active = false, size = 15) {

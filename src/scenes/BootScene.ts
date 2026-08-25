@@ -15,6 +15,7 @@ export class BootScene extends Phaser.Scene {
     this.load.spritesheet('asset:gem:sheet', 'assets/sprites/gem-rewards-sheet-v1.png', { frameWidth: 627, frameHeight: 627 });
     this.load.spritesheet('asset:event:sheet', 'assets/sprites/map-events-sheet-v1.png', { frameWidth: 627, frameHeight: 627 });
     this.load.spritesheet('asset:rare:sheet', 'assets/sprites/rare-choice-sheet-v1.png', { frameWidth: 627, frameHeight: 627 });
+    this.load.spritesheet('asset:legacy:sheet', 'assets/sprites/legacy-traits-sheet-v1.png', { frameWidth: 627, frameHeight: 627 });
     this.load.spritesheet('asset:burrow:sheet', 'assets/sprites/burrow-raider-mouse-sheet-v1.png', { frameWidth: 768, frameHeight: 512 });
     this.load.spritesheet('asset:slinger:sheet', 'assets/sprites/cheese-slinger-mouse-sheet-v1.png', { frameWidth: 543, frameHeight: 724 });
     this.load.spritesheet('asset:boss:sheet', 'assets/sprites/moon-burrow-king-sheet-v1.png', { frameWidth: 627, frameHeight: 627 });

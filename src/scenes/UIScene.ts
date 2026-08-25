@@ -553,6 +553,11 @@ export class UIScene extends Phaser.Scene {
         .setOrigin(0.5),
     );
     panel.add(this.add.text(VIEW.width / 2, 294, `점수 ${s.score ?? 0}   ·   변이 ${s.mutations ?? 0}   ·   개인 기록 #${s.recordRank || '-'}`, { fontFamily: FONT, fontSize: '14px', color: '#ffd36b' }).setOrigin(0.5));
+    const legacy = [`숙련 +${s.masteryGain ?? 0} (Lv ${s.masteryLevel ?? 1})`];
+    if (s.prestigeXp) legacy.push(`명성 +${s.prestigeXp}`);
+    if (s.moonSeals) legacy.push(`전승 인장 +${s.moonSeals}`);
+    if (s.challenges?.length) legacy.push(`도전 완료: ${s.challenges.join(', ')}`);
+    panel.add(this.add.text(VIEW.width / 2, 320, legacy.join('   ·   '), { fontFamily: FONT, fontSize: '13px', color: '#d8c5ff', align: 'center', wordWrap: { width: 520 } }).setOrigin(0.5));
 
     const restart = () => {
       this.clearOverlay();
@@ -561,19 +566,19 @@ export class UIScene extends Phaser.Scene {
     this.bindOverlayKey('keydown-SPACE', restart);
     this.bindOverlayKey('keydown-ENTER', restart);
     if (s.cleared) {
-      panel.add(this.makeButton(VIEW.width / 2, 350, '  오버타임 계속하기  ', () => {
+      panel.add(this.makeButton(VIEW.width / 2, 372, '  오버타임 계속하기  ', () => {
         this.clearOverlay();
         bus.emit(EV.overtime);
       }, true));
-    } else panel.add(this.makeButton(VIEW.width / 2, 350, '  다시 시작  ', restart, true));
-    panel.add(this.makeButton(VIEW.width / 2, 412, '  성장 상점  ', () => {
+    } else panel.add(this.makeButton(VIEW.width / 2, 372, '  다시 시작  ', restart, true));
+    panel.add(this.makeButton(VIEW.width / 2, 434, '  성장 상점  ', () => {
       this.clearOverlay();
       bus.emit(EV.menu);
     }, false));
 
     panel.add(
       this.add
-        .text(VIEW.width / 2, 444, 'Space / Enter', {
+        .text(VIEW.width / 2, 466, 'Space / Enter', {
           fontFamily: FONT,
           fontSize: '13px',
           color: '#5d6b80',

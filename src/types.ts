@@ -221,6 +221,11 @@ export interface GameOverStats {
   bestTime?: number;
   score?: number;
   mutations?: number;
+  masteryGain?: number;
+  masteryLevel?: number;
+  prestigeXp?: number;
+  moonSeals?: number;
+  challenges?: string[];
 }
 
 /** 일시정지 화면에 보여줄 현재 빌드 */
