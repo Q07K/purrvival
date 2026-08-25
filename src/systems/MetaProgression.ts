@@ -24,11 +24,11 @@ export type RunRecord = { time: number; kills: number; level: number; cleared: b
 export type LegacyTraitId = 'catClaw' | 'catMagnet' | 'dogPulse' | 'dogSpark';
 type ChallengeId = 'survive10' | 'slay5000' | 'clearRun' | 'mutate3' | 'level50';
 
-export const LEGACY_TRAITS: { id: LegacyTraitId; character: CharacterId; name: string; desc: string; mastery: number; frame: number }[] = [
-  { id: 'catClaw', character: 'cat', name: '달빛 발톱', desc: '고양이 모든 피해 +12%', mastery: 2, frame: 0 },
-  { id: 'catMagnet', character: 'cat', name: '별빛 수염', desc: '고양이 획득 범위 +30%', mastery: 3, frame: 1 },
-  { id: 'dogPulse', character: 'dog', name: '공명 목걸이', desc: '강아지 펄스 주기 -18%', mastery: 2, frame: 2 },
-  { id: 'dogSpark', character: 'dog', name: '번개 발바닥', desc: '강아지 무기 범위 +15%', mastery: 3, frame: 3 },
+export const LEGACY_TRAITS: { id: LegacyTraitId; character: CharacterId; name: string; desc: string; mastery: number; gold: number; frame: number }[] = [
+  { id: 'catClaw', character: 'cat', name: '달빛 발톱', desc: '고양이 모든 피해 +12%', mastery: 2, gold: 20000, frame: 0 },
+  { id: 'catMagnet', character: 'cat', name: '별빛 수염', desc: '고양이 획득 범위 +30%', mastery: 3, gold: 30000, frame: 1 },
+  { id: 'dogPulse', character: 'dog', name: '공명 목걸이', desc: '강아지 펄스 주기 -18%', mastery: 2, gold: 20000, frame: 2 },
+  { id: 'dogSpark', character: 'dog', name: '번개 발바닥', desc: '강아지 무기 범위 +15%', mastery: 3, gold: 30000, frame: 3 },
 ];
 
 const CHALLENGES: { id: ChallengeId; name: string; desc: string; done: (run: RunRecord) => boolean }[] = [
@@ -90,6 +90,7 @@ class MetaProgression {
   get moonSeals() { return this.data.moonSeals; }
   nextLevelGold() { return RANK_GOLD[this.level] ?? RANK_GOLD[RANK_GOLD.length - 1]; }
   nextPrestigeXp() { return PRESTIGE_XP[this.prestigeLevel] ?? PRESTIGE_XP[PRESTIGE_XP.length - 1]; }
+  legacyOfferingCost() { return 50000 * Math.min(20, Math.max(1, this.prestigeLevel)); }
   levelOf(id: MetaUpgradeId) { return this.data.upgrades[id]; }
   isUnlocked(id: UnlockId) { return this.data.unlocks[id]; }
   unlockInfo(id: UnlockId) { return UNLOCKS[id]; }
@@ -125,9 +126,21 @@ class MetaProgression {
 
   buyTrait(id: LegacyTraitId) {
     const trait = LEGACY_TRAITS.find((entry) => entry.id === id)!;
-    if (!this.legacyUnlocked || this.traitOwned(id) || this.masteryLevel(trait.character) < trait.mastery || this.data.moonSeals < 1) return false;
+    if (!this.legacyUnlocked || this.traitOwned(id) || this.masteryLevel(trait.character) < trait.mastery || this.data.moonSeals < 1 || this.data.gold < trait.gold) return false;
     this.data.moonSeals--;
+    this.data.gold -= trait.gold;
     this.data.traits[id] = true;
+    this.save();
+    return true;
+  }
+
+  buyLegacyOffering() {
+    const cost = this.legacyOfferingCost();
+    if (!this.legacyUnlocked || this.data.gold < cost) return false;
+    const before = this.prestigeLevel;
+    this.data.gold -= cost;
+    this.data.prestigeXp += 120;
+    this.data.moonSeals += Math.max(0, this.prestigeLevel - before);
     this.save();
     return true;
   }

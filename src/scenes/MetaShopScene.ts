@@ -87,24 +87,31 @@ export class MetaShopScene extends Phaser.Scene {
       return;
     }
     const next = meta.nextPrestigeXp();
-    this.add.text(VIEW.width / 2, 138, `달빛 명성 Lv ${meta.prestigeLevel} · 전승 인장 ${meta.moonSeals}개${next > meta.prestigeXp ? ` · 다음 ${next}` : ''}`, { fontFamily: FONT, fontSize: compact ? '13px' : '15px', color: '#d8c5ff' }).setOrigin(0.5);
-    const h = compact ? 76 : 92;
+    const done = meta.challenges().filter((challenge) => challenge.complete);
+    this.add.text(VIEW.width / 2, 138, `달빛 명성 Lv ${meta.prestigeLevel} · 전승 인장 ${meta.moonSeals}개 · 도전 ${done.length}/5${next > meta.prestigeXp ? ` · 다음 ${next}` : ''}`, { fontFamily: FONT, fontSize: compact ? '13px' : '15px', color: '#d8c5ff' }).setOrigin(0.5);
+    const offeringCost = meta.legacyOfferingCost();
+    const canOffer = meta.gold >= offeringCost;
+    this.add.graphics().fillStyle(0x201a31, 1).fillRoundedRect(x, 156, width, 46, 9).lineStyle(1, 0x6f55a5, 1).strokeRoundedRect(x, 156, width, 46, 9);
+    this.add.text(x + 12, 166, '달빛 공물', { fontFamily: FONT, fontSize: compact ? '14px' : '17px', color: '#f0e7ff' });
+    this.add.text(x + 12, 184, '골드로 명성 +120 · 명성 레벨업 시 전승 인장 획득', { fontFamily: FONT, fontSize: compact ? '10px' : '12px', color: '#c0b4d7' });
+    const offer = this.add.text(x + width - 12, 179, `${offeringCost.toLocaleString()} G`, { fontFamily: FONT, fontSize: compact ? '11px' : '14px', color: canOffer ? '#190d28' : '#8e9aae', backgroundColor: canOffer ? '#c6a4ff' : '#232b3a', padding: { x: compact ? 6 : 9, y: compact ? 5 : 7 } }).setOrigin(1, 0.5);
+    if (canOffer) offer.setInteractive({ useHandCursor: true }).on('pointerup', () => { meta.buyLegacyOffering(); this.draw(); });
+    const h = compact ? 66 : 82;
     LEGACY_TRAITS.forEach((trait, i) => {
-      const y = 164 + i * (h + 8);
+      const y = 214 + i * (h + 6);
       const owned = meta.traitOwned(trait.id);
       const mastery = meta.masteryLevel(trait.character);
-      const available = !owned && mastery >= trait.mastery && meta.moonSeals > 0;
+      const available = !owned && mastery >= trait.mastery && meta.moonSeals > 0 && meta.gold >= trait.gold;
       this.add.graphics().fillStyle(owned ? 0x1c2736 : 0x121824, 1).fillRoundedRect(x, y, width, h, 10).lineStyle(2, owned ? 0x8a6cff : 0x2b3547, 1).strokeRoundedRect(x, y, width, h, 10);
       const icon = this.add.image(x + 42, y + h / 2, 'asset:legacy:sheet', trait.frame); icon.setDisplaySize(compact ? 46 : 58, compact ? 46 : 58);
       this.add.text(x + 80, y + (compact ? 14 : 18), `${trait.name} · ${trait.character === 'cat' ? '고양이' : '강아지'}`, { fontFamily: FONT, fontSize: compact ? '15px' : '18px', color: '#ffffff' });
-      this.add.text(x + 80, y + (compact ? 40 : 50), `${trait.desc} · 숙련 Lv ${trait.mastery} 필요`, { fontFamily: FONT, fontSize: compact ? '11px' : '13px', color: '#aeb9ca' });
-      const label = owned ? '보유' : mastery < trait.mastery ? `숙련 Lv ${trait.mastery}` : meta.moonSeals < 1 ? '인장 부족' : '인장 1개';
+      this.add.text(x + 80, y + (compact ? 40 : 50), `${trait.desc} · 숙련 Lv ${trait.mastery} · ${trait.gold.toLocaleString()}G`, { fontFamily: FONT, fontSize: compact ? '10px' : '13px', color: '#aeb9ca' });
+      const label = owned ? '보유' : mastery < trait.mastery ? `숙련 Lv ${trait.mastery}` : meta.moonSeals < 1 ? '인장 부족' : meta.gold < trait.gold ? '골드 부족' : '인장 1개';
       const buy = this.add.text(x + width - 14, y + h / 2, label, { fontFamily: FONT, fontSize: compact ? '11px' : '14px', color: available ? '#120c20' : '#8e9aae', backgroundColor: available ? '#c6a4ff' : '#232b3a', padding: { x: compact ? 6 : 9, y: compact ? 5 : 7 } }).setOrigin(1, 0.5);
       if (available) buy.setInteractive({ useHandCursor: true }).on('pointerup', () => { meta.buyTrait(trait.id); this.draw(); });
     });
-    const done = meta.challenges().filter((challenge) => challenge.complete);
     const challengeText = meta.challenges().map((challenge) => `${challenge.complete ? '✓' : '○'} ${challenge.name}`).join('   ');
-    this.add.text(VIEW.width / 2, compact ? VIEW.height - 70 : 570, `도전 과제 ${done.length}/5 · ${challengeText}`, { fontFamily: FONT, fontSize: compact ? '11px' : '13px', color: '#ffd36b', align: 'center', wordWrap: { width: VIEW.width - 30 } }).setOrigin(0.5);
+    if (!compact) this.add.text(VIEW.width / 2, 570, `도전 과제 ${done.length}/5 · ${challengeText}`, { fontFamily: FONT, fontSize: '13px', color: '#ffd36b', align: 'center', wordWrap: { width: VIEW.width - 30 } }).setOrigin(0.5);
   }
 
   private button(x: number, y: number, label: string, action: () => void, active = false, size = 15) {
