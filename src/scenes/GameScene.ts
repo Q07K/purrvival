@@ -12,7 +12,7 @@ import { SpatialHash } from '../systems/SpatialHash';
 import { sfx } from '../systems/Sfx';
 import { meta } from '../systems/MetaProgression';
 import { TEX, buildTextures, cycleTheme, getTheme } from '../theme';
-import type { Choice, Enemy, Gem, HudStats, MutationChoice, PlayerState, Projectile, RareChoice, WeaponStats } from '../types';
+import type { Choice, Enemy, EnemyShot, Gem, HudStats, MutationChoice, PlayerState, Projectile, RareChoice, WeaponStats } from '../types';
 
 const DEPTH = { ground: 0, gem: 5, aura: 8, enemy: 10, player: 20, proj: 30 };
 const BACKGROUNDS = ['asset:bg:attic', 'asset:bg:cellar', 'asset:bg:garden', 'asset:bg:rooftop', 'asset:bg:toyroom'];
@@ -25,6 +25,7 @@ export class GameScene extends Phaser.Scene {
 
   private enemies!: Pool<Enemy>;
   private projectiles!: Pool<Projectile>;
+  private enemyShots!: Pool<EnemyShot>;
   private gems!: Pool<Gem>;
 
   /** 적 전용 브로드페이즈. 매 프레임 재구축된다. */
@@ -57,9 +58,15 @@ export class GameScene extends Phaser.Scene {
   private mapEventIndex = 0;
   private nextMutationAt = OVERTIME_TIME;
   private mutationCount = 0;
+  private abyssNextLevel = 0;
+  private abyssCharges = 0;
+  private abyssContracts = 0;
+  private lastAbyssAt = 0;
   private spawnMult = 1;
   private enemyHpMult = 1;
   private enemyDamageMult = 1;
+  private chargerWeightMult = 1;
+  private slingerWeightMult = 1;
   private goldMult = 1;
   private gemXpMult = 1;
   private rareDamageMult = 1;
@@ -104,9 +111,15 @@ export class GameScene extends Phaser.Scene {
     this.mapEventIndex = 0;
     this.nextMutationAt = OVERTIME_TIME;
     this.mutationCount = 0;
+    this.abyssNextLevel = 0;
+    this.abyssCharges = 0;
+    this.abyssContracts = 0;
+    this.lastAbyssAt = 0;
     this.spawnMult = 1;
     this.enemyHpMult = 1;
     this.enemyDamageMult = 1;
+    this.chargerWeightMult = 1;
+    this.slingerWeightMult = 1;
     this.goldMult = 1;
     this.gemXpMult = 1;
     this.rareDamageMult = 1;
@@ -157,6 +170,11 @@ export class GameScene extends Phaser.Scene {
       MAX_PROJECTILES,
       (index) => this.makeProjectile(index),
       (p) => p.sprite.setVisible(false),
+    );
+    this.enemyShots = new Pool<EnemyShot>(
+      160,
+      (index) => this.makeEnemyShot(index),
+      (shot) => shot.sprite.setVisible(false),
     );
     this.gems = new Pool<Gem>(
       MAX_GEMS,
@@ -244,7 +262,7 @@ export class GameScene extends Phaser.Scene {
       index, active: false, uid: 0, kind: 'grunt',
       x: 0, y: 0, hp: 1, maxHp: 1, speed: 0, damage: 0, radius: 10, xp: 1,
       hitAt: new Float64Array(8),
-      knockX: 0, knockY: 0, flash: 0, elite: false, boss: false, gemTier: 0,
+      knockX: 0, knockY: 0, specialAt: 0, specialUntil: 0, flash: 0, elite: false, boss: false, gemTier: 0,
       sprite: this.add.image(0, 0, TEX.enemy('grunt')).setDepth(DEPTH.enemy).setVisible(false),
     };
   }
@@ -255,6 +273,13 @@ export class GameScene extends Phaser.Scene {
       x: 0, y: 0, vx: 0, vy: 0, damage: 0, radius: 6,
       pierce: 1, life: 0, slot: 0, knockback: 0, hitUids: [], tex: 'shard',
       sprite: this.add.image(0, 0, TEX.proj('shard')).setDepth(DEPTH.proj).setVisible(false),
+    };
+  }
+
+  private makeEnemyShot(index: number): EnemyShot {
+    return {
+      index, active: false, x: 0, y: 0, vx: 0, vy: 0, damage: 0, life: 0,
+      sprite: this.add.image(0, 0, 'asset:gem:sheet', 0).setDepth(DEPTH.proj).setVisible(false),
     };
   }
 
@@ -326,6 +351,7 @@ export class GameScene extends Phaser.Scene {
 
     this.stepWeapons(this.elapsed * 1000, dt);
     this.stepProjectiles(dt);
+    this.stepEnemyShots(dt);
     this.stepGems(dt);
     if (this.elapsed >= this.nextGemMergeAt) {
       this.nextGemMergeAt = this.elapsed + 0.8;
@@ -530,13 +556,17 @@ export class GameScene extends Phaser.Scene {
   private pickKind(): EnemyKind {
     const avail = ENEMY_KINDS.filter((k) => this.elapsed >= k.from);
     let total = 0;
-    for (const k of avail) total += k.weight;
+    for (const k of avail) total += this.enemyWeight(k);
     let r = Math.random() * total;
     for (const k of avail) {
-      r -= k.weight;
+      r -= this.enemyWeight(k);
       if (r <= 0) return k;
     }
     return avail[0];
+  }
+
+  private enemyWeight(kind: EnemyKind) {
+    return kind.weight * (kind.id === 'charger' ? this.chargerWeightMult : kind.id === 'slinger' ? this.slingerWeightMult : 1);
   }
 
   private spawnEnemy(
@@ -562,12 +592,15 @@ export class GameScene extends Phaser.Scene {
     e.eventTag = eventTag;
     e.knockX = 0;
     e.knockY = 0;
+    e.specialAt = this.elapsed * 1000 + 650 + Math.random() * 900;
+    e.specialUntil = 0;
     e.flash = 0;
     e.hitAt.fill(0);
 
-    e.sprite.setTexture(boss ? 'asset:boss:sheet' : kind.id === 'burrow' ? 'asset:burrow:sheet' : TEX.enemy(kind.id));
+    e.sprite.setTexture(boss ? 'asset:boss:sheet' : kind.id === 'burrow' || kind.id === 'charger' ? 'asset:burrow:sheet' : kind.id === 'slinger' ? 'asset:slinger:sheet' : TEX.enemy(kind.id));
     if (boss) e.sprite.setScale(150 / 543);
-    else if (kind.id === 'burrow') e.sprite.setScale(80 / 768);
+    else if (kind.id === 'burrow' || kind.id === 'charger') e.sprite.setScale(80 / 768);
+    else if (kind.id === 'slinger') e.sprite.setScale(52 / 543);
     else this.scaleTo(e.sprite, this.enemyDisplaySize(kind.id, e.radius));
     e.sprite.clearTint();
     e.sprite.setVisible(true);
@@ -578,6 +611,14 @@ export class GameScene extends Phaser.Scene {
       { id: 'march', name: '쥐 대행진', detail: '적 생성 +35% · 골드/점수 보정 +25%' },
       { id: 'redMoon', name: '붉은 달', detail: '적 피해 +25% · 엘리트가 빠르게 등장 · 보정 +30%' },
       { id: 'harvest', name: '풍요의 달', detail: '적 HP +25% · 젬 경험치 +50% · 보정 +20%' },
+    ];
+  }
+
+  private abyssChoices(): MutationChoice[] {
+    return [
+      { id: 'abyssRush', name: '돌격 계약', detail: '돌진 쥐 출현 +75% · 적 피해 +12% · 골드/점수 +35%' },
+      { id: 'abyssVolley', name: '투석 계약', detail: '투석 쥐 출현 +80% · 적 피해 +12% · 젬 경험치 +25%' },
+      { id: 'abyssHunt', name: '사냥 계약', detail: '적 HP +25% · 적 피해 +12% · 엘리트가 빠르게 등장 · 보정 +45%' },
     ];
   }
 
@@ -601,8 +642,33 @@ export class GameScene extends Phaser.Scene {
       }
 
       const inv = dist > 0.0001 ? 1 / dist : 0;
-      e.x += (dx * inv * e.speed + e.knockX) * dt;
-      e.y += (dy * inv * e.speed + e.knockY) * dt;
+      const now = this.elapsed * 1000;
+      let move = 1;
+      let speed = e.speed;
+
+      if (e.kind === 'charger') {
+        if (now >= e.specialAt) {
+          e.specialAt = now + 2800;
+          e.specialUntil = now + 420;
+        }
+        if (now < e.specialUntil) speed *= 3.2;
+      } else if (e.kind === 'slinger') {
+        if (dist < 300) move = -1;
+        else if (dist < 390) move = 0;
+        if (dist <= 460 && now >= e.specialAt) {
+          e.specialAt = now + 2150;
+          e.specialUntil = now + 350;
+          e.sprite.setTint(0xffd36b);
+        }
+        if (e.specialUntil > 0 && now >= e.specialUntil) {
+          e.specialUntil = 0;
+          e.sprite.clearTint();
+          this.spawnEnemyShot(e, dx * inv, dy * inv);
+        }
+      }
+
+      e.x += (dx * inv * speed * move + e.knockX) * dt;
+      e.y += (dy * inv * speed * move + e.knockY) * dt;
       e.knockX *= decay;
       e.knockY *= decay;
 
@@ -617,6 +683,41 @@ export class GameScene extends Phaser.Scene {
         e.flash -= dt;
         if (e.flash <= 0) e.sprite.clearTint();
       }
+    }
+  }
+
+  private spawnEnemyShot(e: Enemy, dx: number, dy: number) {
+    const shot = this.enemyShots.spawn();
+    if (!shot) return;
+    const speed = 340;
+    shot.x = e.x + dx * (e.radius + 10);
+    shot.y = e.y + dy * (e.radius + 10);
+    shot.vx = dx * speed;
+    shot.vy = dy * speed;
+    shot.damage = e.damage * 0.75;
+    shot.life = 2;
+    shot.sprite.setPosition(shot.x, shot.y).setScale(22 / 627).setVisible(true);
+  }
+
+  private stepEnemyShots(dt: number) {
+    const p = this.player;
+    for (const shot of this.enemyShots.items) {
+      if (!shot.active) continue;
+      shot.x += shot.vx * dt;
+      shot.y += shot.vy * dt;
+      shot.life -= dt;
+      shot.sprite.setPosition(shot.x, shot.y).setRotation(Math.atan2(shot.vy, shot.vx));
+      if (shot.life <= 0) { this.enemyShots.release(shot); continue; }
+      const dx = p.x - shot.x;
+      const dy = p.y - shot.y;
+      if (dx * dx + dy * dy > 22 * 22) continue;
+      if (p.invuln <= 0) {
+        p.hp -= Math.max(1, shot.damage - p.armor);
+        p.invuln = 0.25;
+        this.cameras.main.shake(90, 0.004);
+        sfx.play('hurt');
+      }
+      this.enemyShots.release(shot);
     }
   }
 
@@ -997,7 +1098,7 @@ export class GameScene extends Phaser.Scene {
 
   private damageEnemy(e: Enemy, amount: number, kx: number, ky: number, knockback: number) {
     e.hp -= amount;
-    const resist = e.elite ? 0.25 : 1;
+    const resist = e.elite || e.kind === 'charger' ? 0.25 : 1;
     e.knockX += kx * knockback * resist;
     e.knockY += ky * knockback * resist;
 
@@ -1236,7 +1337,8 @@ export class GameScene extends Phaser.Scene {
       if (!e.active) continue;
       const tex = TEX.enemyWalk(e.kind, walkFrame);
       if (e.boss) e.sprite.setTexture('asset:boss:sheet', walkFrame);
-      else if (e.kind === 'burrow') e.sprite.setTexture('asset:burrow:sheet', walkFrame);
+      else if (e.kind === 'burrow' || e.kind === 'charger') e.sprite.setTexture('asset:burrow:sheet', walkFrame);
+      else if (e.kind === 'slinger') e.sprite.setTexture('asset:slinger:sheet', walkFrame);
       else if (e.sprite.texture.key !== tex) e.sprite.setTexture(tex);
       // 쥐 원본도 왼쪽을 향한다. 플레이어가 오른쪽에 있을 때만 뒤집는다.
       e.sprite.setFlipX(this.player.x > e.x);
@@ -1289,13 +1391,28 @@ export class GameScene extends Phaser.Scene {
   private openLevelUp() {
     const choices = this.prog.rollChoices(Math.random);
     if (choices.length === 0) {
-      // 더 올릴 게 없으면 그냥 넘어간다
       this.pendingLevels = 0;
+      this.openAbyssContract();
       return;
     }
     this.awaitingChoice = true;
     sfx.play('levelup');
     bus.emit(EV.levelup, { choices, level: this.player.level });
+    this.scene.pause();
+  }
+
+  /** 빌드가 끝난 뒤 5레벨마다 계약 게이지를 채우고, 10레벨/2분마다 한 번만 제시한다. */
+  private openAbyssContract() {
+    if (!this.abyssNextLevel) this.abyssNextLevel = (Math.floor(this.player.level / 5) + 1) * 5;
+    while (this.player.level >= this.abyssNextLevel) {
+      this.abyssCharges++;
+      this.abyssNextLevel += 5;
+    }
+    if (this.abyssCharges < 2 || this.elapsed < this.lastAbyssAt + 120) return;
+    this.abyssCharges -= 2;
+    this.lastAbyssAt = this.elapsed;
+    this.awaitingChoice = true;
+    bus.emit(EV.mutationChoice, { choices: this.abyssChoices(), stage: this.abyssContracts + 1, abyss: true });
     this.scene.pause();
   }
 
@@ -1333,11 +1450,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onMutationPicked(choice: MutationChoice) {
+    if (choice.id.startsWith('abyss')) {
+      this.enemyDamageMult *= 1.12;
+      if (choice.id === 'abyssRush') { this.chargerWeightMult *= 1.75; this.goldMult *= 1.35; }
+      if (choice.id === 'abyssVolley') { this.slingerWeightMult *= 1.8; this.gemXpMult *= 1.25; }
+      if (choice.id === 'abyssHunt') { this.enemyHpMult *= 1.25; this.goldMult *= 1.45; this.nextEliteAt = Math.min(this.nextEliteAt, this.elapsed + 15); }
+      this.abyssContracts++;
+      this.awaitingChoice = false;
+      bus.emit(EV.mapEvent, `심연 계약 ${this.abyssContracts}: ${choice.name}`);
+      this.scene.resume();
+      return;
+    }
     this.enemyDamageMult *= 1.15;
     if (choice.id === 'march') { this.spawnMult *= 1.35; this.goldMult *= 1.25; }
     if (choice.id === 'redMoon') { this.enemyDamageMult *= 1.25; this.goldMult *= 1.3; this.nextEliteAt = Math.min(this.nextEliteAt, this.elapsed + 15); }
     if (choice.id === 'harvest') { this.enemyHpMult *= 1.25; this.gemXpMult *= 1.5; this.goldMult *= 1.2; }
     this.mutationCount++;
+    this.lastAbyssAt = this.elapsed;
     this.awaitingChoice = false;
     bus.emit(EV.mapEvent, `변이 ${this.mutationCount}: ${choice.name}`);
     this.scene.resume();
@@ -1454,9 +1583,10 @@ export class GameScene extends Phaser.Scene {
     this.applyPlayerScale();
 
     for (const e of this.enemies.items) {
-      e.sprite.setTexture(e.boss ? 'asset:boss:sheet' : e.kind === 'burrow' ? 'asset:burrow:sheet' : TEX.enemy(e.kind));
+      e.sprite.setTexture(e.boss ? 'asset:boss:sheet' : e.kind === 'burrow' || e.kind === 'charger' ? 'asset:burrow:sheet' : e.kind === 'slinger' ? 'asset:slinger:sheet' : TEX.enemy(e.kind));
       if (e.boss) e.sprite.setScale(150 / 543);
-      else if (e.kind === 'burrow') e.sprite.setScale(80 / 768);
+      else if (e.kind === 'burrow' || e.kind === 'charger') e.sprite.setScale(80 / 768);
+      else if (e.kind === 'slinger') e.sprite.setScale(52 / 543);
       else this.scaleTo(e.sprite, this.enemyDisplaySize(e.kind, e.radius));
     }
     for (const g of this.gems.items) {

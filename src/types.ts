@@ -30,6 +30,9 @@ export interface Enemy extends Poolable {
   hitAt: Float64Array;
   knockX: number;
   knockY: number;
+  /** 돌진/투석 등 적 고유 행동의 다음 발동·지속 시각(ms) */
+  specialAt: number;
+  specialUntil: number;
   flash: number;
   elite: boolean;
   boss: boolean;
@@ -56,6 +59,17 @@ export interface Projectile extends Poolable {
   hitUids: number[];
   /** 어느 무기의 투사체인지 — 테마 교체 시 텍스처를 되돌리는 데 쓴다 */
   tex: string;
+  sprite: Phaser.GameObjects.Image;
+}
+
+/** 투석 쥐가 발사하는 치즈 탄환 */
+export interface EnemyShot extends Poolable {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  damage: number;
+  life: number;
   sprite: Phaser.GameObjects.Image;
 }
 
@@ -180,7 +194,7 @@ export interface RareChoice {
 }
 
 export interface MutationChoice {
-  id: 'march' | 'redMoon' | 'harvest';
+  id: 'march' | 'redMoon' | 'harvest' | 'abyssRush' | 'abyssVolley' | 'abyssHunt';
   name: string;
   detail: string;
 }

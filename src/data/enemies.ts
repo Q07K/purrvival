@@ -30,6 +30,16 @@ export const ENEMY_KINDS: EnemyKind[] = [
     hp: 70, speed: 34, damage: 16, radius: 17, xp: 4,
     elite: false, from: 100, weight: 34, cluster: 1,
   },
+  {
+    id: 'charger',
+    hp: 110, speed: 76, damage: 22, radius: 26, xp: 8,
+    elite: false, from: 1800, weight: 18, cluster: 1,
+  },
+  {
+    id: 'slinger',
+    hp: 52, speed: 58, damage: 15, radius: 15, xp: 5,
+    elite: false, from: 1800, weight: 22, cluster: 1,
+  },
 ];
 
 /** 일정 간격으로 등장하는 엘리트 */
